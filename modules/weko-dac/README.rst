@@ -107,3 +107,9 @@ Entity Configuration                       自己署名のみ (authority_hints /
    GET  /.well-known/openid-federation                Entity Configuration (自己署名)
 
 dataset_id は URL エンコードして渡す (例: ``https%3A%2F%2Fdoi.org%2F10.yyyy%2Fdata.456``)。
+
+動作確認
+========
+
+インストール後の動作確認手順は `docs/VERIFICATION_ja.md <docs/VERIFICATION_ja.md>`_
+を参照 (ステップ1〜3は WEKO 単体で実施可能、ステップ4は IdP/Wallet 構築後)。
