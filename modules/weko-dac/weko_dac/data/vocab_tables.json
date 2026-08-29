@@ -1,0 +1,10 @@
+{
+  "version": "demo-2026-08",
+  "comment": "Vocabulary membership tables (Policy Registry distributed; spec vol.05 §8 item 2). Used for isA / isPartOf constraint evaluation. Values not present in a table yield needs_human.",
+  "isA": {
+    "rdc:certified-storage": ["rdc:gakunin-rdm", "rdc:certified-storage", "rdc:institutional-storage"]
+  },
+  "isPartOf": {
+    "gakunin-member": ["gakunin-member"]
+  }
+}

@@ -1,0 +1,105 @@
+{% extends 'admin/master.html' %}
+{% block body %}
+<h2>申請 {{ application.application_id }}
+  <small><span class="label label-info">{{ application.status }}</span></small>
+</h2>
+<p>
+  <a href="{{ url_for('.index') }}">&larr; 一覧へ戻る</a>
+</p>
+
+<div class="row">
+  <div class="col-md-6">
+    <h4>申請内容 (エンベロープ)</h4>
+    <pre style="max-height:420px;overflow:auto;">{{ payload_json }}</pre>
+    {% if application.madmp_id %}
+    <p>maDMP: <a href="{{ application.madmp_id }}" target="_blank" rel="noopener">{{ application.madmp_id }}</a></p>
+    {% endif %}
+  </div>
+  <div class="col-md-6">
+    <h4>審査パッケージ (Assessment)
+      <form method="post" action="{{ url_for('.refresh_assessment', app_id=application.application_id) }}" style="display:inline;">
+        <button class="btn btn-xs btn-default" type="submit">再生成</button>
+      </form>
+    </h4>
+    {% set reco = assessment.assessment.get('recommendation', {}) %}
+    <p>
+      推奨判定: <strong>{{ reco.get('decision', '-') }}</strong>
+      (confidence {{ reco.get('confidence', '-') }})<br>
+      根拠: {{ reco.get('rationale', '') }}
+      {% if reco.get('conditions') %}<br>推奨付帯条件: {{ reco.get('conditions') | join(' / ') }}{% endif %}
+    </p>
+    <pre style="max-height:360px;overflow:auto;">{{ assessment_json }}</pre>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <h4>照会メッセージ</h4>
+    <ul class="list-group" style="max-height:260px;overflow:auto;">
+      {% for m in messages %}
+      <li class="list-group-item">
+        <strong>{{ m.sender }}</strong> ({{ m.author_kind }} / {{ m.type }})
+        — {{ m.sent_at.strftime('%Y-%m-%d %H:%M') }}<br>
+        {{ m.body }}
+      </li>
+      {% else %}
+      <li class="list-group-item">メッセージなし</li>
+      {% endfor %}
+    </ul>
+    <h4>決裁履歴</h4>
+    <ul class="list-group">
+      {% for d in decisions %}
+      <li class="list-group-item">
+        <strong>{{ d.decision }}</strong> — {{ d.decided_by }}
+        ({{ d.decided_at.strftime('%Y-%m-%d %H:%M') }})
+        {% if d.diverges_from_ai %}<span class="label label-warning">AI推奨と相違</span>{% endif %}<br>
+        理由: {{ d.reason }}
+      </li>
+      {% else %}
+      <li class="list-group-item">決裁なし</li>
+      {% endfor %}
+    </ul>
+  </div>
+  <div class="col-md-6">
+    <h4>決裁</h4>
+    {% if application.status in ['under_review', 'needs_info'] %}
+    <form method="post" action="{{ url_for('.decision', app_id=application.application_id) }}">
+      <div class="form-group">
+        <label>判定</label>
+        <select name="decision" class="form-control">
+          <option value="approve">approve (承認)</option>
+          <option value="approve_with_conditions">approve_with_conditions (条件付き承認)</option>
+          <option value="reject">reject (却下)</option>
+          <option value="request_info">request_info (照会)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>理由 (必須)</label>
+        <textarea name="reason" class="form-control" rows="3" required></textarea>
+      </div>
+      <div class="form-group">
+        <label>付帯条件 (1行1件 / 条件付き承認時)</label>
+        <textarea name="conditions" class="form-control" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label>照会文 (request_info時。空なら理由を送信)</label>
+        <textarea name="inquiry_body" class="form-control" rows="2"></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary"
+              onclick="return confirm('この判定を確定しますか?');">決裁を確定</button>
+    </form>
+    {% elif application.status == 'active' %}
+    <form method="post" action="{{ url_for('.revoke', app_id=application.application_id) }}">
+      <div class="form-group">
+        <label>取消理由 (必須)</label>
+        <textarea name="reason" class="form-control" rows="2" required></textarea>
+      </div>
+      <button type="submit" class="btn btn-danger"
+              onclick="return confirm('許諾を取り消しますか? 発行済みVisaは失効します。');">許諾を取消 (revoke)</button>
+    </form>
+    {% else %}
+    <p>状態 {{ application.status }} では決裁操作はできません。</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

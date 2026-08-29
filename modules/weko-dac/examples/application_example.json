@@ -1,0 +1,67 @@
+{
+  "resource_type": "dataset",
+  "callback_url": "https://dg.example.org/api/dg/v1/rags-events",
+  "madmp_ref": {
+    "dmp_id": {"identifier": "https://doi.org/10.xxxx/dmp.123", "type": "doi"},
+    "dg_record_url": null
+  },
+  "applicant": {
+    "researcher": {
+      "name": "山田 花子",
+      "orcid": "https://orcid.org/0000-0002-1825-0097",
+      "eppn": "hanako@example-u.ac.jp",
+      "affiliation": {"name": "○○大学", "ror": null}
+    },
+    "agent": {
+      "entity_id": "dar-agent",
+      "software": {"name": "rdc-dar-agent", "version": "0.1.0"}
+    }
+  },
+  "requests": [
+    {
+      "dataset_id": "https://doi.org/10.yyyy/data.456",
+      "odrl_request": {
+        "@context": ["http://www.w3.org/ns/odrl.jsonld", "https://rdc.nii.ac.jp/ns/odrl-profile/v1"],
+        "@type": "Request",
+        "uid": "urn:uuid:11111111-2222-3333-4444-555555555555",
+        "profile": "https://rdc.nii.ac.jp/ns/odrl-profile/v1",
+        "rdc:madmp": "https://doi.org/10.xxxx/dmp.123",
+        "assignee": "https://orcid.org/0000-0002-1825-0097",
+        "target": "https://doi.org/10.yyyy/data.456",
+        "permission": [{
+          "action": "use",
+          "constraint": [
+            {"leftOperand": "purpose", "operator": "isA",
+             "rightOperand": {"@id": "http://purl.obolibrary.org/obo/DUO_0000042"}},
+            {"leftOperand": "dateTime", "operator": "lteq",
+             "rightOperand": {"@value": "2028-03-31", "@type": "xsd:date"}},
+            {"leftOperand": "rdc:storageClass", "operator": "isA",
+             "rightOperand": {"@id": "rdc:gakunin-rdm"}}
+          ],
+          "duty": [
+            {"action": "rdc:cite"},
+            {"action": "rdc:reportCompletion"},
+            {"action": "rdc:deleteData"}
+          ]
+        }]
+      }
+    }
+  ],
+  "purpose": {
+    "duo_codes": ["DUO:0000042"],
+    "description": "コホートデータの統計解析による疾患関連因子の検討 (研究計画書3.2節)",
+    "project_title": "デモ研究プロジェクト",
+    "period": {"start": "2026-10-01", "end": "2028-03-31"}
+  },
+  "evidence": {
+    "passport": "PLACEHOLDER_PASSPORT_JWT",
+    "ethics_approval": {"authority": "○○大学倫理委員会", "approval_id": "2026-123", "document_url": null},
+    "security_measures": {
+      "storage": "GakuNin RDM プロジェクト内 (機関ストレージ)",
+      "encryption_at_rest": true,
+      "access_control": "プロジェクトメンバー限定",
+      "disposal": "利用期間終了時に削除し、削除報告を提出する"
+    }
+  },
+  "message": "初回申請です。よろしくお願いいたします。"
+}

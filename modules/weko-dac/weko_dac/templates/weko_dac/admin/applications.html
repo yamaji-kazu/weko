@@ -1,0 +1,38 @@
+{% extends 'admin/master.html' %}
+{% block body %}
+<h2>DAC 申請一覧</h2>
+<form method="get" class="form-inline" style="margin-bottom:10px;">
+  <label>状態:
+    <select name="status" class="form-control input-sm">
+      <option value="">(all)</option>
+      {% for s in ['submitted','under_review','needs_info','approved','rejected','agreement_issued','active','expired','revoked','withdrawn'] %}
+      <option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit" class="btn btn-sm btn-default">絞り込み</button>
+</form>
+<table class="table table-striped table-condensed">
+  <thead>
+    <tr>
+      <th>Application ID</th><th>状態</th><th>研究者</th><th>エージェント</th>
+      <th>受付日時</th><th>AI推奨</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for a in applications %}
+    <tr>
+      <td>{{ a.application_id }}</td>
+      <td><span class="label label-{{ 'success' if a.status == 'active' else ('danger' if a.status in ['rejected','revoked'] else 'info') }}">{{ a.status }}</span></td>
+      <td>{{ a.researcher_sub }}</td>
+      <td style="max-width:220px;word-break:break-all;">{{ a.agent_id }}</td>
+      <td>{{ a.received_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td>{{ recos.get(a.application_id, '-') }}</td>
+      <td><a class="btn btn-xs btn-primary" href="{{ url_for('.detail', app_id=a.application_id) }}">審査</a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7">申請はありません。</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

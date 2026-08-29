@@ -1,0 +1,77 @@
+{% extends 'admin/master.html' %}
+{% block body %}
+<h2>{{ 'Offer 編集' if offer else 'Offer 新規登録' }}</h2>
+{% set t = (offer.template if offer and offer.template else {}) %}
+<form method="post" style="max-width:720px;">
+  <div class="form-group">
+    <label>Dataset ID (DOI 等の URI) *</label>
+    <input type="text" name="dataset_id" class="form-control" required
+           value="{{ offer.dataset_id if offer else '' }}"
+           placeholder="https://doi.org/10.yyyy/data.456">
+  </div>
+  <div class="form-group">
+    <label>タイトル (管理用)</label>
+    <input type="text" name="title" class="form-control"
+           value="{{ offer.title if offer else '' }}">
+  </div>
+  <div class="form-group">
+    <label>審査区分</label>
+    <select name="access_class" class="form-control">
+      {% for c in ['open', 'registered', 'controlled'] %}
+      <option value="{{ c }}" {% if t.get('access_class', 'controlled') == c %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group">
+    <label>許容 DUO コード (カンマ区切り。例: DUO:0000042)</label>
+    <input type="text" name="duo_codes" class="form-control"
+           value="{{ t.get('duo_codes', []) | join(', ') }}">
+  </div>
+  <div class="form-group">
+    <label>利用期間上限 (xsd:duration 例 P2Y、または終了日 YYYY-MM-DD)</label>
+    <input type="text" name="period" class="form-control"
+           value="{{ t.get('period', '') }}">
+  </div>
+  <div class="form-group">
+    <label>保管先要件 (例: rdc:certified-storage。空欄で制約なし)</label>
+    <input type="text" name="storage_class" class="form-control"
+           value="{{ t.get('storage_class', '') }}">
+  </div>
+  <div class="form-group">
+    <label>地理的制約 (ISO 3166。例: JP。空欄で制約なし)</label>
+    <input type="text" name="spatial" class="form-control"
+           value="{{ t.get('spatial', '') }}">
+  </div>
+  <div class="checkbox">
+    <label><input type="checkbox" name="ethics_required" value="1"
+           {% if t.get('ethics_required') %}checked{% endif %}> 倫理審査承認を要求する</label>
+  </div>
+  <div class="form-group">
+    <label>義務 (duty)</label><br>
+    {% for d in duty_choices %}
+    <label class="checkbox-inline"><input type="checkbox" name="duties" value="{{ d }}"
+      {% if d in t.get('duties', ['rdc:cite']) %}checked{% endif %}> {{ d }}</label>
+    {% endfor %}
+  </div>
+  <div class="form-group">
+    <label>禁止 (prohibition)</label><br>
+    {% for p in prohibition_choices %}
+    <label class="checkbox-inline"><input type="checkbox" name="prohibitions" value="{{ p }}"
+      {% if p in t.get('prohibitions', ['distribute', 'rdc:reIdentify']) %}checked{% endif %}> {{ p }}</label>
+    {% endfor %}
+  </div>
+  <div class="form-group">
+    <label>データ実体 (サーバ上のファイルパス、または配信 URL)</label>
+    <input type="text" name="distribution_uri" class="form-control"
+           value="{{ offer.distribution_uri if offer else '' }}"
+           placeholder="/var/tmp/restricted/data456.zip">
+    <p class="help-block">制限公開データの配信 (§6.3) に使用。ローカルパスの場合は保存時に sha256 を計算します。</p>
+  </div>
+  <button type="submit" class="btn btn-primary">保存 (ODRL Offer を生成)</button>
+  <a class="btn btn-default" href="{{ url_for('.index') }}">キャンセル</a>
+</form>
+{% if offer %}
+<h4 style="margin-top:24px;">生成済み ODRL Offer</h4>
+<pre style="max-height:320px;overflow:auto;">{{ offer.offer | tojson(indent=2) }}</pre>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,3 @@
+include *.rst
+recursive-include weko_dac *.html
+recursive-include weko_dac *.json
