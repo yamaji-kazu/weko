@@ -6,7 +6,7 @@
 set -e
 
 IDP=https://203.0.113.10/auth/realms/rdc     # IdP (実IPに読み替え)
-WEKO=http://203.0.113.20                     # WEKO サーバ
+WEKO=https://163.220.178.140                     # WEKO サーバ
 API=$WEKO/api/dac/v1
 DATASET="https://doi.org/10.yyyy/data.456"
 DATASET_ENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$DATASET")

@@ -13,7 +13,7 @@ import requests
 from flask import current_app
 from invenio_db import db
 
-from . import audit, signing
+from . import allowlist, audit, signing
 from .auth import verify_jws
 from .models import (DacAgreement, DacApplication, DacEventOutbox,
                      DacMessage, DacOffer, DacVisa, new_id)
@@ -120,6 +120,13 @@ def _verify_passport(passport_jwt):
 
 def intake_application(payload, researcher_sub, agent_id):
     """Validate and register an application. Returns the model instance."""
+    # 0. static allowlist (DEMO-20 §4 / DEMO-24 §3 — Trust Chain 代替)
+    allowlist_result = allowlist.check_agent(agent_id)
+    if allowlist_result == 'denied':
+        raise IntakeError(403, 'agent_not_allowlisted',
+                          'Agent %s is not in the static allowlist'
+                          % agent_id)
+
     # 1. envelope schema
     try:
         jsonschema.validate(payload, APPLICATION_SCHEMA)
@@ -174,8 +181,10 @@ def intake_application(payload, researcher_sub, agent_id):
                   {}).get('identifier'),
         payload=payload,
         verification={
-            # [DEMO] trust_chain / trust_marks / dpop not verified
-            'trust_chain': 'not_verified_demo',
+            # [DEMO] Trust Chain is replaced by the static allowlist
+            # (DEMO-20 §4); trust_marks / dpop not verified
+            'trust_chain': 'static_allowlist',
+            'allowlist': allowlist_result,
             'trust_marks': [],
             'delegation': 'valid',
             'passport': passport_result,
@@ -328,9 +337,12 @@ def issue_grants(application, conditions=None):
     issued = []
     valid_until = _grant_period_end(application)
     valid_until_ts = calendar.timegm(valid_until.utctimetuple())
-    researcher = ((application.payload.get('applicant') or {})
-                  .get('researcher') or {})
-    subject = researcher.get('orcid') or application.researcher_sub
+    # Holder identifier = access-token ``sub`` (the Keycloak user UUID
+    # in the demo — NOT eppn/ORCID; see DEMO-11 §6 / DEMO-12 §0).
+    # This keeps visa.sub == presentation.sub == token.sub verifiable
+    # end-to-end (RDC-AAP-01 §6.3 items 3). The ORCID remains the
+    # assignee of the ODRL Agreement (vol.05 §6).
+    subject = application.researcher_sub
 
     for req in application.payload.get('requests') or []:
         dataset_id = req.get('dataset_id') or req.get('resource_id')

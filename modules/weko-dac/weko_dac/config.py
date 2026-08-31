@@ -46,6 +46,17 @@ WEKO_DAC_TLS_CA_BUNDLE = os.environ.get('WEKO_DAC_TLS_CA_BUNDLE', '')
 #: JWKS cache TTL in seconds (spec: <= 300).
 WEKO_DAC_JWKS_CACHE_TTL = 300
 
+#: Optional expected ``aud`` of access tokens (DEMO-21 §2). Empty
+#: disables the aud check (Keycloak default tokens carry aud=account
+#: unless an audience mapper is configured — align with DEMO-24 §2).
+WEKO_DAC_OIDC_AUDIENCE = os.environ.get('WEKO_DAC_OIDC_AUDIENCE', '')
+
+#: Path to the static allowlist JSON (DEMO-24 §3, distributed as
+#: aifs docs/demo/config/allowlist.json). Demo substitute for Trust
+#: Chain verification (DEMO-20 §4). Empty = accept all callers and
+#: record 'allowlist: not_configured' in the verification snapshot.
+WEKO_DAC_ALLOWLIST_PATH = os.environ.get('WEKO_DAC_ALLOWLIST_PATH', '')
+
 #: Scope required for application endpoints.
 WEKO_DAC_SCOPE_APPLY = 'rags:apply'
 #: Scope required for the clearinghouse (access-token) endpoint.
@@ -138,3 +149,9 @@ WEKO_DAC_CALLBACK_RETRY_SCHEDULE = [60, 300, 1800, 7200, 21600, 43200, 86400]
 #: Base URL of the audit log service (RDC-AAP-04 §6). Empty = spool to
 #: the local outbox table only ([DEMO], same as the wallet demo impl).
 WEKO_DAC_AUDIT_API_BASE = os.environ.get('WEKO_DAC_AUDIT_API_BASE', '')
+
+#: Local JSONL audit sink (DEMO-20 §4: 各サービスのローカル JSONL 追記).
+#: Empty = <instance_path>/data/dac_audit.jsonl. Events use the common
+#: schema of RDC-AAP-04 §6.1 and are written in addition to the DB
+#: outbox. Set to '-' to disable the file sink.
+WEKO_DAC_AUDIT_JSONL_PATH = os.environ.get('WEKO_DAC_AUDIT_JSONL_PATH', '')

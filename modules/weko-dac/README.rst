@@ -51,6 +51,8 @@ WEKO3 モジュール。前提文書: RDC-AAP-00/04/05 (aifs リポジトリ doc
    $ export WEKO_DAC_WALLET_API_BASE=https://203.0.113.10/wallet/api/wallet/v1
    $ export WEKO_DAC_WALLET_JWKS_URL=https://203.0.113.10/wallet/.well-known/jwks.json
    $ export WEKO_DAC_TLS_CA_BUNDLE=/path/to/tls.crt         # DEMO-10 の自己署名証明書
+   $ export WEKO_DAC_ALLOWLIST_PATH=/path/to/allowlist.json # DEMO-24 §3 (静的allowlist)
+   # 形式は examples/allowlist.example.json を参照。未設定時は全許可 (verification に記録)
 
    # 4. デモ用 Offer の登録 (管理画面からも可)
    $ invenio dac demo-offer "https://doi.org/10.yyyy/data.456" \
@@ -78,14 +80,14 @@ DEMO-10/11 と同じ整理。RDC-ATF (Trust Anchor 等) 構築時に置き換え
 ========================================  =============================================
 分冊01/04 の要件                           本モジュールでの扱い
 ========================================  =============================================
-OpenID Federation Trust Chain 検証         未実装 ([DEMO] verification に not_verified_demo を記録)
-Trust Mark (agent:requester) 失効照会      未実装 (IdP のクライアント登録・scope で代替)
+OpenID Federation Trust Chain 検証         静的 allowlist で代替 (DEMO-20 §4 / DEMO-24 §3)
+Trust Mark (agent:requester) 失効照会      省略 (allowlist の role に含意)
 DPoP 束縛検証                              未実装 (Bearer/DPoP ヘッダの JWT 検証のみ)
 act クレーム (RFC 8693 委任)               act.sub があれば使用、なければ azp を委任エージェントとみなす
 GA4GH Passport の Visa 束検証              JWT 署名検証のみ (結果を verification に記録、非致命)
 renewal (§6.4) / appeal (§8.3)             未実装 (Phase 1 対象外として除外)
 署名鍵の KMS/HSM 管理                      ファイル鍵 (0600)。本番は KMS へ
-監査ログサービス送信                        ローカル outbox にスプールのみ
+監査ログサービス送信                        ローカル outbox + JSONL 追記 (DEMO-20 §4)
 Entity Configuration                       自己署名のみ (authority_hints / Trust Mark なし)
 ========================================  =============================================
 

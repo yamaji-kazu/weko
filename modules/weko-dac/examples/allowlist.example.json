@@ -1,0 +1,21 @@
+{
+  "trust_anchor": "demo-static-v1",
+  "_comment": "DEMO-24 §3 形式。正式版は aifs docs/demo/config/allowlist.json として配布される。jwks_uri の代わりに inline の \"jwks\": {\"keys\": [...]} も受理する。",
+  "entities": [
+    {
+      "entity_id": "https://163.220.178.112/agents/dar-001",
+      "role": "agent:requester",
+      "jwks_uri": "https://163.220.178.141/auth/realms/rdc/protocol/openid-connect/certs"
+    },
+    {
+      "entity_id": "https://163.220.178.140",
+      "role": "agent:dac",
+      "jwks_uri": "https://163.220.178.140/api/dac/v1/visa-jwks.json"
+    },
+    {
+      "entity_id": "https://163.220.178.141/wallet",
+      "role": "wallet",
+      "jwks_uri": "https://163.220.178.141/wallet/.well-known/jwks.json"
+    }
+  ]
+}

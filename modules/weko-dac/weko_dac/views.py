@@ -10,8 +10,9 @@ from flask import (Blueprint, Response, current_app, g, jsonify, redirect,
                    request, send_file)
 from invenio_db import db
 
-from . import audit, services, signing
-from .auth import AuthError, require_rags_token, verify_jws
+from . import allowlist, audit, services, signing
+from .auth import (AuthError, jwk_to_public_key, require_rags_token,
+                   verify_jws)
 from .models import (DacAgreement, DacApplication, DacMessage, DacOffer,
                      DacPresentationJti, DacVisa)
 
@@ -278,12 +279,38 @@ def _verify_presentation(presentation, dataset_id):
     if typ not in handlers:
         raise AuthError(400, 'unsupported_presentation_type',
                         'typ %s not accepted' % typ)
-    wallet_jwks = current_app.config.get('WEKO_DAC_WALLET_JWKS_URL')
-    if not wallet_jwks:
-        raise AuthError(503, 'wallet_not_configured',
-                        'WEKO_DAC_WALLET_JWKS_URL not set')
     entity_id = current_app.config['WEKO_DAC_ENTITY_ID']
-    payload = verify_jws(presentation, wallet_jwks, audience=entity_id)
+    # Wallet trust: static allowlist (DEMO-24 §3) supplies the wallet's
+    # jwks (inline or by jwks_uri); config URL is the fallback.
+    inline_keys = allowlist.wallet_inline_jwks()
+    if inline_keys:
+        try:
+            header = pyjwt.get_unverified_header(presentation)
+            key = None
+            for k in inline_keys:
+                if not header.get('kid') or k.get('kid') == header['kid']:
+                    key = k
+                    break
+            payload = pyjwt.decode(
+                presentation, jwk_to_public_key(key),
+                algorithms=['ES256', 'RS256'], audience=entity_id)
+        except AuthError:
+            raise
+        except Exception as ex:
+            raise AuthError(401, 'invalid_presentation',
+                            'Presentation verification failed: %s' % ex)
+    else:
+        wallet_jwks = allowlist.wallet_jwks_url()
+        if not wallet_jwks:
+            raise AuthError(503, 'wallet_not_configured',
+                            'No wallet jwks (allowlist or '
+                            'WEKO_DAC_WALLET_JWKS_URL)')
+        payload = verify_jws(presentation, wallet_jwks, audience=entity_id)
+    wallet_entity = allowlist.wallet_entity()
+    if wallet_entity and payload.get('iss') != wallet_entity['entity_id']:
+        raise AuthError(403, 'unknown_wallet',
+                        'Presentation issuer %s is not the allowlisted '
+                        'wallet' % payload.get('iss'))
     # freshness (exp <= iat + 300 already enforced by wallet; re-check age)
     max_age = current_app.config['WEKO_DAC_PRESENTATION_MAX_AGE']
     iat = payload.get('iat') or 0
@@ -302,6 +329,11 @@ def _verify_presentation(presentation, dataset_id):
     visa_jwt = payload.get('credential')
     if not visa_jwt:
         raise AuthError(400, 'invalid_presentation', 'credential missing')
+    # presenting agent must also be allowlisted (Trust Chain 代替)
+    if allowlist.check_agent(payload.get('presented_by') or '') == 'denied':
+        raise AuthError(403, 'agent_not_allowlisted',
+                        'presented_by %s is not in the static allowlist'
+                        % payload.get('presented_by'))
     meta = {'presentation_sub': payload.get('sub'),
             'presented_by': payload.get('presented_by'),
             'credential_id': payload.get('credential_id'),

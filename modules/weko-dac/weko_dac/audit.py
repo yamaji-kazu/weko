@@ -10,6 +10,7 @@ only digests are stored where the content is sensitive (§6.1).
 
 import hashlib
 import json
+import os
 import uuid
 from datetime import datetime
 
@@ -17,6 +18,32 @@ from flask import current_app
 from invenio_db import db
 
 from .models import DacAuditOutbox
+
+
+def _jsonl_path():
+    path = current_app.config.get('WEKO_DAC_AUDIT_JSONL_PATH') or ''
+    if path == '-':
+        return None
+    if not path:
+        path = os.path.join(current_app.instance_path, 'data',
+                            'dac_audit.jsonl')
+    return path
+
+
+def _append_jsonl(event):
+    """DEMO-20 §4: local JSONL audit sink (best-effort)."""
+    path = _jsonl_path()
+    if not path:
+        return
+    try:
+        dirname = os.path.dirname(path)
+        if dirname and not os.path.isdir(dirname):
+            os.makedirs(dirname)
+        with open(path, 'a') as fp:
+            fp.write(json.dumps(event, ensure_ascii=False,
+                                default=str) + '\n')
+    except Exception:
+        current_app.logger.exception('weko-dac: audit JSONL write failed')
 
 
 def digest(obj):
@@ -43,5 +70,6 @@ def record(event_type, subject=None, actor=None, payload=None,
         }
         db.session.add(DacAuditOutbox(event_type=event_type, payload=event))
         # Caller is responsible for the surrounding commit.
+        _append_jsonl(event)
     except Exception:
         current_app.logger.exception('weko-dac: audit spool failed')

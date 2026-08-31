@@ -186,7 +186,10 @@ def require_rags_token(scope=None, require_agent=True):
                 if not jwks:
                     raise AuthError(500, 'server_misconfigured',
                                     'WEKO_DAC_OIDC_ISSUER/JWKS_URL not set')
-                payload = verify_jws(token, jwks, issuer=issuer)
+                audience = current_app.config.get(
+                    'WEKO_DAC_OIDC_AUDIENCE') or None
+                payload = verify_jws(token, jwks, issuer=issuer,
+                                     audience=audience)
                 if scope and not _has_scope(payload, scope):
                     raise AuthError(403, 'insufficient_scope',
                                     'Scope "%s" required' % scope)
