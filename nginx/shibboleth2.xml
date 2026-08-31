@@ -11,7 +11,7 @@
     -->
     <RequestMapper type="XML">
     <RequestMap>
-        <Host name="weko3.example.org"
+        <Host name="163.220.178.140"
                 authType="shibboleth"
                 requireSession="true"
                 redirectToSSL="443">
@@ -23,7 +23,7 @@
     </RequestMapper>
 
     <!-- The ApplicationDefaults element is where most of Shibboleth's SAML bits are defined. -->
-    <ApplicationDefaults entityID="https://weko3.example.org/shibboleth-sp"
+    <ApplicationDefaults entityID="https://163.220.178.140/shibboleth-sp"
         REMOTE_USER="eppn persistent-id targeted-id"
         cipherSuites="DEFAULT:!EXP:!LOW:!aNULL:!eNULL:!DES:!IDEA:!SEED:!RC4:!3DES:!kRSA:!SSLv2:!SSLv3:!TLSv1:!TLSv1.1">
 
@@ -36,15 +36,16 @@
         "false", this makes an assertion stolen in transit easier for attackers to misuse.
         -->
         <Sessions lifetime="28800" timeout="3600" relayState="ss:mem"
-                  checkAddress="false" handlerSSL="false" cookieProps="http">
+                  checkAddress="false" handlerSSL="true" cookieProps="https"
+                  handlerURL="https://163.220.178.140/Shibboleth.sso">
 
             <!--
             Configures SSO for a default IdP. To properly allow for >1 IdP, remove
             entityID property and adjust discoveryURL to point to discovery service.
             You can also override entityID on /Login query string, or in RequestMap/htaccess.
             -->
-            <SSO entityID="https://weko3.example.org/idp/simplesamlphp"
-                 discoveryProtocol="SAMLDS" discoveryURL="https://ds.example.org/DS/WAYF">
+            <SSO entityID="https://163.220.178.141/auth/realms/rdc"
+                 >
               SAML2
             </SSO>
 
@@ -86,7 +87,7 @@
 
         <MetadataProvider type="XML" validate="true" path="idp-metadata.xml"/>
 
-        <MetadataProvider type="XML" validate="true" path="https://core.orthros.gakunin.nii.ac.jp/idp" />
+        <!-- orthros disabled for demo -->
 
         <!-- Example of remotely supplied batch of signed metadata. -->
         <!--

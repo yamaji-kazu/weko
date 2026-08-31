@@ -43,10 +43,11 @@ services:
     environment:
       - PATH=/home/invenio/.virtualenvs/invenio/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       - VIRTUALENVWRAPPER_PYTHON=/home/invenio/.virtualenvs/invenio/bin/python
-      - INVENIO_WEB_HOST=127.0.0.1
+      - INVENIO_WEB_HOST=163.220.178.140
       - INVENIO_WEB_INSTANCE=invenio
       - INVENIO_WEB_VENV=invenio
-      - INVENIO_WEB_HOST_NAME=weko3.example.org
+      - INVENIO_WEB_HOST_NAME=163.220.178.140
+      - WEKO_DAC_ENTITY_ID=https://163.220.178.140
       - INVENIO_WEB_PROTOCOL=https
       - INVENIO_USER_EMAIL=wekosoftware@nii.ac.jp
       - INVENIO_USER_PASS=uspass123
@@ -158,7 +159,7 @@ services:
       options:
         max-size: "10m"
     ports:
-      - "5001:5000"
+      - "127.0.0.1:5001:5000"
     #privileged: true
     # pscap apt-get install libcap-ng-utils
     #cap_add:
@@ -183,10 +184,11 @@ services:
     environment:
       - PATH=/home/invenio/.virtualenvs/invenio/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       - VIRTUALENVWRAPPER_PYTHON=/home/invenio/.virtualenvs/invenio/bin/python
-      - INVENIO_WEB_HOST=127.0.0.1
+      - INVENIO_WEB_HOST=163.220.178.140
       - INVENIO_WEB_INSTANCE=invenio
       - INVENIO_WEB_VENV=invenio
-      - INVENIO_WEB_HOST_NAME=weko3.example.org
+      - INVENIO_WEB_HOST_NAME=163.220.178.140
+      - WEKO_DAC_ENTITY_ID=https://163.220.178.140
       - INVENIO_WEB_PROTOCOL=https
       - INVENIO_USER_EMAIL=wekosoftware@nii.ac.jp
       - INVENIO_USER_PASS=uspass123
@@ -306,7 +308,7 @@ services:
     volumes:
       - pgsql-data:/var/lib/postgresql/data
     ports:
-      #- "25401:5432"
+      #- "127.0.0.1:25401:5432"
       - "5432"
 
   pgpool:
@@ -329,13 +331,13 @@ services:
       - PGPOOL_NUM_INIT_CHILDREN=2
       - PGPOOL_MAX_POOL=2
     ports:
-      - "25401:5432"
+      - "127.0.0.1:25401:5432"
 
   redis:
     restart: "always"
     image: redis:7.4.1
     ports:
-      - "26301:6379"
+      - "127.0.0.1:26301:6379"
     deploy:
       resources:
         limits:
@@ -351,15 +353,15 @@ services:
     environment:
       - "ES_JAVA_OPTS=-Xms2048m -Xmx2048m"
     ports:
-      - "29201:9200"
-      - "29301:9300"
+      - "127.0.0.1:29201:9200"
+      - "127.0.0.1:29301:9300"
 
   rabbitmq:
     restart: "always"
     image: rabbitmq:4.0.2
     ports:
-      - "24301:4369"
-      - "45601:25672"
+      - "127.0.0.1:24301:4369"
+      - "127.0.0.1:45601:25672"
     environment:
       - "RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit consumer_timeout 10800000"
 
@@ -394,7 +396,7 @@ services:
     image: mher/flower:0.9.5
     command: --broker=amqp://guest:guest@rabbitmq:5672// --broker_api=http://guest:guest@rabbitmq:5671/api/
     ports:
-      - "5501:5555"
+      - "127.0.0.1:5501:5555"
     links:
       - rabbitmq
 
@@ -404,7 +406,7 @@ services:
       context: ./inbox
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       - ENABLE_PUSH_NOTIFICATIONS=True
       - ICON=/static/images/weko-logo-256.png
@@ -426,7 +428,7 @@ services:
       - MONGO_INITDB_ROOT_USERNAME=inbox
       - MONGO_INITDB_ROOT_PASSWORD=ibpass123
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     volumes:
       - mongo_data:/data/db
 
