@@ -7,7 +7,7 @@
 | パラメータ | 値 |
 |---|---|
 | P1: 公開基盤ベース URL | `https://163.220.178.140` (API: `/api/dac/v1`) |
-| P2: デモ用データセット | `https://163.220.178.140/records/demo-restricted-001` |
+| P2: デモ用データセット | `https://163.220.178.140/records/2000001` |
 | IdP (realm rdc) | `https://163.220.178.141/auth/realms/rdc` |
 | Grant Wallet | `https://163.220.178.141/wallet/api/wallet/v1` |
 
@@ -22,7 +22,7 @@ PUB=https://163.220.178.140
 API=$PUB/api/dac/v1
 IDP=https://163.220.178.141/auth/realms/rdc
 W=https://163.220.178.141/wallet/api/wallet/v1
-DATASET="https://163.220.178.140/records/demo-restricted-001"
+DATASET="https://163.220.178.140/records/2000001"
 DATASET_ENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$DATASET")
 
 DG_PORTAL_SECRET=...      # dg-portal のシークレット (public+PKCE構成なら不要)
@@ -37,7 +37,7 @@ RESEARCHER_PW=...
 docker compose -f docker-compose2.yml exec web bash -c \
   "echo 'demo restricted data for demo01' > /var/tmp/demo-restricted-001.txt"
 docker compose -f docker-compose2.yml exec web invenio dac demo-offer \
-  "https://163.220.178.140/records/demo-restricted-001" \
+  "https://163.220.178.140/records/2000001" \
   --duo DUO:0000042 --period P2Y \
   --file /var/tmp/demo-restricted-001.txt
 ```
