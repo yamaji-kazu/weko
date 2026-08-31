@@ -14,7 +14,7 @@ from flask import current_app
 from invenio_db import db
 
 from . import allowlist, audit, signing
-from .auth import verify_jws
+from .auth import verify_jws, verify_jws_with_keys
 from .models import (DacAgreement, DacApplication, DacEventOutbox,
                      DacMessage, DacOffer, DacVisa, new_id)
 
@@ -98,24 +98,108 @@ def offer_from_template(dataset_id, template):
 # Application intake (§5.2)
 # --------------------------------------------------------------------------
 
-def _verify_passport(passport_jwt):
-    """[DEMO] Verify the passport JWT signature against the demo IdP.
+def _verify_passport(passport_jwt, researcher_sub=None):
+    """Verify ``evidence.passport`` — demo IdP signatures only (§5.2-4).
 
-    In DEMO-10 the GA4GH Passport is simplified to IdP attribute claims;
-    a verification failure is therefore recorded rather than fatal.
+    Policy (c) of the DG inquiry 2026-08-31: only JWTs signed by the
+    demo IdP (Keycloak realm ``rdc``) are accepted. Two formats:
+
+    - **Visa 単体** (recommended, DEMO-20 §4 / DEMO-24 作業4): a JWT
+      carrying ``ga4gh_visa_v1`` directly (Keycloak protocol-mapper).
+    - **Passport**: a JWT whose ``ga4gh_passport_v1`` is an array of
+      Visa JWT strings; each inner Visa is verified the same way.
+
+    Binding: the (outer) ``sub`` must equal the access-token ``sub``
+    (the Keycloak user UUID) so the passport belongs to the applicant.
+
+    Raises IntakeError (400 invalid_passport) on any failure when
+    WEKO_DAC_PASSPORT_ENFORCE is on; otherwise records the result.
     """
-    issuer = current_app.config.get('WEKO_DAC_OIDC_ISSUER') or None
-    jwks = current_app.config.get('WEKO_DAC_OIDC_JWKS_URL')
-    if not jwks and issuer:
-        jwks = issuer.rstrip('/') + '/protocol/openid-connect/certs'
+    enforce = current_app.config.get('WEKO_DAC_PASSPORT_ENFORCE', True)
+
+    def fail(detail):
+        if enforce:
+            raise IntakeError(400, 'invalid_passport', detail)
+        return {'result': 'invalid', 'detail': detail}
+
+    if not passport_jwt:
+        return fail('evidence.passport is empty')
+
+    # Key source (指定: 2026-08-31 公開基盤宛):
+    # allowlist の role: visa_issuer の inline jwks で署名検証し、
+    # iss はその entity_id (https://…/visa-issuer) と一致すること。
+    # allowlist に visa_issuer が未配布の間は、従来どおりデモ IdP の
+    # realm JWKS へフォールバックする。
+    vi = allowlist.visa_issuer_entity()
+    if vi is not None:
+        expected_iss = vi.get('entity_id')
+        inline = allowlist.entity_inline_jwks(vi)
+        method = 'allowlist_visa_issuer'
+
+        def _verify(token):
+            if inline:
+                return verify_jws_with_keys(token, inline,
+                                            issuer=expected_iss)
+            if vi.get('jwks_uri'):
+                return verify_jws(token, vi['jwks_uri'],
+                                  issuer=expected_iss)
+            raise IntakeError(500, 'allowlist_misconfigured',
+                              'visa_issuer entry has neither jwks nor '
+                              'jwks_uri')
+    else:
+        issuer = current_app.config.get('WEKO_DAC_OIDC_ISSUER') or None
+        jwks = current_app.config.get('WEKO_DAC_OIDC_JWKS_URL')
+        if not jwks and issuer:
+            jwks = issuer.rstrip('/') + '/protocol/openid-connect/certs'
+        if not jwks:
+            return fail('no visa_issuer in allowlist and IdP JWKS not '
+                        'configured')
+        method = 'idp_jwks_fallback'
+
+        def _verify(token):
+            return verify_jws(token, jwks, issuer=issuer)
+
     try:
-        payload = verify_jws(passport_jwt, jwks, issuer=issuer)
-        visas = payload.get('ga4gh_passport_v1') or []
-        return {'result': 'valid',
-                'sub': payload.get('sub'),
-                'visa_count': len(visas)}
+        payload = _verify(passport_jwt)
+    except IntakeError:
+        raise
     except Exception as ex:
-        return {'result': 'invalid', 'detail': str(ex)}
+        return fail('passport JWT not verifiable with the trusted visa '
+                    'issuer keys: %s' % ex)
+
+    visa_types = []
+    if payload.get('ga4gh_visa_v1'):
+        fmt = 'visa'
+        visa_types.append(
+            (payload['ga4gh_visa_v1'] or {}).get('type'))
+    elif payload.get('ga4gh_passport_v1'):
+        fmt = 'passport'
+        inner = payload.get('ga4gh_passport_v1')
+        if not isinstance(inner, list) or not inner:
+            return fail('ga4gh_passport_v1 must be a non-empty array')
+        for visa_jwt in inner:
+            try:
+                vp = _verify(visa_jwt)
+            except IntakeError:
+                raise
+            except Exception as ex:
+                return fail('inner Visa not verifiable with the trusted '
+                            'visa issuer keys: %s' % ex)
+            visa_types.append((vp.get('ga4gh_visa_v1') or {}).get('type'))
+            if researcher_sub and vp.get('sub') and \
+                    vp.get('sub') != researcher_sub:
+                return fail('inner Visa sub does not match the '
+                            'access-token sub')
+    else:
+        return fail('neither ga4gh_visa_v1 nor ga4gh_passport_v1 '
+                    'claim present')
+
+    if researcher_sub and payload.get('sub') and \
+            payload.get('sub') != researcher_sub:
+        return fail('passport sub (%s) does not match the access-token '
+                    'sub' % payload.get('sub'))
+    return {'result': 'valid', 'format': fmt, 'method': method,
+            'sub': payload.get('sub'), 'visa_types': visa_types}
 
 
 def intake_application(payload, researcher_sub, agent_id):
@@ -164,9 +248,10 @@ def intake_application(payload, researcher_sub, agent_id):
                               'odrl_request.permission required')
         dataset_results.append(entry)
 
-    # 4. passport verification ([DEMO] non-fatal)
+    # 4. passport verification — demo IdP signatures only (policy (c))
     passport_result = _verify_passport(
-        (payload.get('evidence') or {}).get('passport') or '')
+        (payload.get('evidence') or {}).get('passport') or '',
+        researcher_sub=researcher_sub)
 
     # 5. accept
     application = DacApplication(

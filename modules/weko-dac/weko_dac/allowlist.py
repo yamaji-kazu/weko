@@ -120,3 +120,19 @@ def wallet_inline_jwks():
     if entity and isinstance(entity.get('jwks'), dict):
         return entity['jwks'].get('keys', [])
     return None
+
+
+def visa_issuer_entity():
+    """The Visa issuer entry (role ``visa_issuer``) or None.
+
+    Used for evidence.passport verification: the Visa's ``iss`` must
+    equal this entity_id and its signature must verify with the
+    entity's inline ``jwks`` (or ``jwks_uri``)."""
+    return first_by_role('visa_issuer')
+
+
+def entity_inline_jwks(entity):
+    """Inline JWK list of an allowlist entity, or None."""
+    if entity and isinstance(entity.get('jwks'), dict):
+        return entity['jwks'].get('keys') or None
+    return None

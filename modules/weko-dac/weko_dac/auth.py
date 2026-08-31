@@ -110,18 +110,14 @@ def _find_key(keys, kid, alg=None):
     return None
 
 
-def verify_jws(token, jwks_url, issuer=None, audience=None):
-    """Verify a JWS/JWT against a JWKS. Returns the payload dict."""
+def verify_jws_with_keys(token, keys, issuer=None, audience=None):
+    """Verify a JWS/JWT against an in-memory JWK list (e.g. allowlist
+    inline jwks). Returns the payload dict."""
     try:
         header = jwt.get_unverified_header(token)
     except Exception as ex:
         raise AuthError(401, 'invalid_token', 'Malformed JWT: %s' % ex)
-    keys = fetch_jwks(jwks_url)
     key = _find_key(keys, header.get('kid'), header.get('alg'))
-    if key is None:
-        # key rotation: force refresh once
-        keys = fetch_jwks(jwks_url, force=True)
-        key = _find_key(keys, header.get('kid'), header.get('alg'))
     if key is None:
         raise AuthError(401, 'invalid_token', 'No matching JWK')
     public_key = jwk_to_public_key(key)
@@ -137,6 +133,24 @@ def verify_jws(token, jwks_url, issuer=None, audience=None):
         raise AuthError(401, 'invalid_token', 'JWT verification failed: %s'
                         % ex)
     return payload
+
+
+def verify_jws(token, jwks_url, issuer=None, audience=None):
+    """Verify a JWS/JWT against a fetched JWKS. Returns the payload."""
+    try:
+        header = jwt.get_unverified_header(token)
+    except Exception as ex:
+        raise AuthError(401, 'invalid_token', 'Malformed JWT: %s' % ex)
+    keys = fetch_jwks(jwks_url)
+    key = _find_key(keys, header.get('kid'), header.get('alg'))
+    if key is None:
+        # key rotation: force refresh once
+        keys = fetch_jwks(jwks_url, force=True)
+        key = _find_key(keys, header.get('kid'), header.get('alg'))
+    if key is None:
+        raise AuthError(401, 'invalid_token', 'No matching JWK')
+    return verify_jws_with_keys(token, [key], issuer=issuer,
+                                audience=audience)
 
 
 def _bearer_token():

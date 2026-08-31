@@ -155,3 +155,10 @@ WEKO_DAC_AUDIT_API_BASE = os.environ.get('WEKO_DAC_AUDIT_API_BASE', '')
 #: schema of RDC-AAP-04 §6.1 and are written in addition to the DB
 #: outbox. Set to '-' to disable the file sink.
 WEKO_DAC_AUDIT_JSONL_PATH = os.environ.get('WEKO_DAC_AUDIT_JSONL_PATH', '')
+
+#: Enforce evidence.passport verification at intake (policy (c) of the
+#: DG inquiry: only demo-IdP-signed Visa/Passport JWTs are accepted;
+#: failures reject the application with 400 invalid_passport). Set to
+#: False to fall back to record-only verification.
+WEKO_DAC_PASSPORT_ENFORCE = os.environ.get(
+    'WEKO_DAC_PASSPORT_ENFORCE', 'true').lower() != 'false'

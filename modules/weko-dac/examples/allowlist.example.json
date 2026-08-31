@@ -16,6 +16,18 @@
       "entity_id": "https://163.220.178.141/wallet",
       "role": "wallet",
       "jwks_uri": "https://163.220.178.141/wallet/.well-known/jwks.json"
+    },
+    {
+      "entity_id": "https://163.220.178.141/visa-issuer",
+      "role": "visa_issuer",
+      "_comment": "evidence.passport (Visa) の検証鍵。RCOS 配布の実鍵に差し替えること。iss はこの entity_id と一致必須",
+      "jwks": {
+        "keys": [
+          {"kty": "EC", "crv": "P-256", "kid": "visa-issuer-1",
+           "alg": "ES256", "use": "sig",
+           "x": "REPLACE_WITH_REAL_KEY", "y": "REPLACE_WITH_REAL_KEY"}
+        ]
+      }
     }
   ]
 }
