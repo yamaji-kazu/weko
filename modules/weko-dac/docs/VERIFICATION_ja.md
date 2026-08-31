@@ -127,6 +127,13 @@ print(app_row.application_id, app_row.status)
 **期待結果**: `app-2026-xxxxxxxx under_review` が表示される
 (submitted → validating → under_review まで自動遷移)。
 
+> **注意 (Passport 検証実装後)**: サンプル JSON の `evidence.passport` は
+> プレースホルダのため、既定では `invalid_passport` で拒否される。
+> IdP 未構築での単体確認時は、事前に環境変数
+> `WEKO_DAC_PASSPORT_ENFORCE=false` を web/worker に設定して再起動するか、
+> 正規の visa_issuer 署名 Visa を `evidence.passport` に入れること
+> (検証仕様は README「実装済み機能」8 を参照)。確認後は必ず true に戻す。
+
 ### 3.2 担当者コンソールでの審査・決裁 (分冊01 §7.3)
 
 1. ブラウザで管理者 (System/Repository Administrator 相当) ログイン

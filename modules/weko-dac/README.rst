@@ -28,8 +28,12 @@ WEKO3 モジュール。前提文書: RDC-AAP-00/04/05 (aifs リポジトリ doc
    (署名 / aud / exp / jti リプレイ / Visa 有効性 / sub 一致 / presented_by)、
    署名付きダウンロード URL の発行。移行期の Visa 直接提示も受理 (監査に
    ``presentation_absent`` を記録)。
-7. **監査証跡 (§9)**: 全イベントを ``dac_audit_outbox`` にスプール
-   (監査ログサービス構築後にフラッシュ)。
+7. **監査証跡 (§9)**: 全イベントを ``dac_audit_outbox`` にスプールし、
+   ローカル JSONL (DEMO-20 §4) にも追記。
+8. **Passport 検証 (§5.2 処理4)**: ``evidence.passport`` (Visa 単体 /
+   Passport 形式) を allowlist の ``visa_issuer`` エントリの inline jwks で
+   検証 (署名 / exp / iss=visa_issuer entity_id / sub=申請トークン sub)。
+   不合格は 400 invalid_passport で申請拒否。
 
 セットアップ
 ============
@@ -112,8 +116,14 @@ Entity Configuration                       自己署名のみ (authority_hints /
 
 dataset_id は URL エンコードして渡す (例: ``https%3A%2F%2Fdoi.org%2F10.yyyy%2Fdata.456``)。
 
-動作確認
-========
+ドキュメント
+============
 
-インストール後の動作確認手順は `docs/VERIFICATION_ja.md <docs/VERIFICATION_ja.md>`_
-を参照 (ステップ1〜3は WEKO 単体で実施可能、ステップ4は IdP/Wallet 構築後)。
+- `docs/CHANGES_ja.md <docs/CHANGES_ja.md>`_ — 開発履歴 (何を・どの仕様に
+  基づいて・どの順で実装したか)
+- `docs/VERIFICATION_ja.md <docs/VERIFICATION_ja.md>`_ — インストール後の
+  動作確認手順 (ステップ1〜3は WEKO 単体、ステップ4は IdP/Wallet 構築後)
+- `docs/DEMO01_curl_ja.md <docs/DEMO01_curl_ja.md>`_ — デモ01 curl 手順書
+  (DEMO-21 受入条件1: 申請→承認→Visa→deposit→配信)
+- `docs/OPERATIONS_ja.md <docs/OPERATIONS_ja.md>`_ — デモ環境の運用手順書
+  (公開設定・DNAT・証明書・Shibboleth 連携・環境変数・トラブルシュート)
