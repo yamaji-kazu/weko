@@ -97,6 +97,7 @@ Entity Configuration                       自己署名のみ (authority_hints /
 ::
 
    GET  /api/dac/v1/datasets/{dataset_id}/policy      ODRL Offer (公開)
+   GET  /api/dac/v1/policy?dataset_id=...             同上 (クエリ形式。URL型IDに推奨)
    GET  /api/dac/v1/visa-jwks.json                    Visa/Agreement 検証鍵
    GET  /api/dac/v1/visa-status?jti=...               Visa 失効照会
    POST /api/dac/v1/applications                      申請 (scope rags:apply, 委任必須)
@@ -106,6 +107,7 @@ Entity Configuration                       自己署名のみ (authority_hints /
    GET/POST /api/dac/v1/applications/{id}/messages    照会対話
    POST /api/dac/v1/applications/{id}/withdraw        取下げ
    POST /api/dac/v1/datasets/{id}/access-token        Presentation → 署名付きURL (scope rags:retrieve)
+   POST /api/dac/v1/access-token                      同上 (dataset_id をボディで渡す形式。URL型IDに推奨)
    GET  /.well-known/openid-federation                Entity Configuration (自己署名)
 
 dataset_id は URL エンコードして渡す (例: ``https%3A%2F%2Fdoi.org%2F10.yyyy%2Fdata.456``)。

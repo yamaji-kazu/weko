@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """REST API blueprints for weko-dac (RDC-AAP-01 §4–6)."""
 
+import re
 import time
 from datetime import datetime
 from urllib.parse import unquote
@@ -46,18 +47,74 @@ def openid_federation():
 # Policy API (§4.2) — public
 # --------------------------------------------------------------------------
 
-@blueprint_api.route('/datasets/<path:dataset_id>/policy',
-                     methods=['GET'])
-def get_policy(dataset_id):
-    """Return the ODRL Offer of a dataset."""
-    dataset_id = unquote(dataset_id)
-    row = DacOffer.query.filter_by(dataset_id=dataset_id).first()
+_SCHEME_REPAIR_RE = re.compile(r'^(https?):/([^/].*)$')
+
+
+def _dataset_candidates(raw):
+    """Candidate spellings of a dataset id received via URL path.
+
+    Reverse proxies decode %2F and merge slashes before the path
+    reaches the app, so "https://host/x" arrives as "https:/host/x".
+    We repair that here; the query-parameter form (below) avoids the
+    problem entirely and is the recommended transport for URL-shaped
+    identifiers.
+    """
+    cands = []
+
+    def add(value):
+        if value and value not in cands:
+            cands.append(value)
+
+    add(raw)
+    add(unquote(raw))
+    for c in list(cands):
+        m = _SCHEME_REPAIR_RE.match(c)
+        if m:
+            add(m.group(1) + '://' + m.group(2))
+    return cands
+
+
+def _find_offer(raw):
+    """Resolve a DacOffer from any candidate spelling.
+
+    Returns (row_or_None, canonical_dataset_id).
+    """
+    for c in _dataset_candidates(raw):
+        row = DacOffer.query.filter_by(dataset_id=c).first()
+        if row is not None:
+            return row, row.dataset_id
+    return None, unquote(raw)
+
+
+def _policy_response(raw):
+    row, canonical = _find_offer(raw)
     if row is None:
         return _problem(404, 'unknown_dataset',
-                        'No policy registered for %s' % dataset_id)
+                        'No policy registered for %s' % canonical)
     return Response(
         response=jsonify(row.offer).get_data(),
         mimetype='application/odrl+json')
+
+
+@blueprint_api.route('/datasets/<path:dataset_id>/policy',
+                     methods=['GET'])
+def get_policy(dataset_id):
+    """Return the ODRL Offer of a dataset (path form, §4.2)."""
+    return _policy_response(dataset_id)
+
+
+@blueprint_api.route('/policy', methods=['GET'])
+def get_policy_query():
+    """Query-parameter form: ``GET /policy?dataset_id=<url-encoded>``.
+
+    Reliable for URL-shaped identifiers, which proxies mangle in the
+    path (%2F decoding + slash merging). Same response as §4.2.
+    """
+    raw = request.args.get('dataset_id', '')
+    if not raw:
+        return _problem(400, 'missing_dataset_id',
+                        'dataset_id query parameter required')
+    return _policy_response(raw)
 
 
 @blueprint_api.route('/visa-jwks.json', methods=['GET'])
@@ -371,8 +428,31 @@ def _verify_visa(visa_jwt, dataset_id):
                      methods=['POST'])
 @require_rags_token(scope='rags:retrieve')
 def access_token(dataset_id):
-    """Exchange a Grant Presentation for a signed download URL (§6.3)."""
-    dataset_id = unquote(dataset_id)
+    """Exchange a Grant Presentation for a signed download URL (§6.3,
+    path form — subject to proxy path mangling for URL-shaped ids)."""
+    return _access_token_impl(dataset_id)
+
+
+@blueprint_api.route('/access-token', methods=['POST'])
+@require_rags_token(scope='rags:retrieve')
+def access_token_body():
+    """Body form: ``POST /access-token`` with
+    ``{"dataset_id": "...", "presentation": "..."}`` — recommended for
+    URL-shaped identifiers (avoids proxy %2F decoding/slash merging)."""
+    body = request.get_json(silent=True) or {}
+    raw = body.get('dataset_id') or ''
+    if not raw:
+        return _problem(400, 'missing_dataset_id',
+                        'dataset_id required in the JSON body')
+    return _access_token_impl(raw)
+
+
+def _access_token_impl(raw_dataset_id):
+    """Shared §6.3 processing; dataset id resolved via _find_offer."""
+    offer_row, dataset_id = _find_offer(raw_dataset_id)
+    if offer_row is None:
+        return _problem(404, 'unknown_dataset',
+                        'No policy registered for %s' % dataset_id)
     body = request.get_json(silent=True) or {}
     try:
         if body.get('presentation'):
@@ -410,8 +490,7 @@ def access_token(dataset_id):
         db.session.rollback()
         return err.as_response()
 
-    offer_row = DacOffer.query.filter_by(dataset_id=dataset_id).first()
-    if offer_row is None or not offer_row.distribution_uri:
+    if not offer_row.distribution_uri:
         return _problem(404, 'no_distribution',
                         'No data registered for this dataset')
     token = signing.sign_download_token(

@@ -47,6 +47,16 @@ DEMO-21 依頼1 のとおり `rdc:ethicsApproval` 制約は付けない (`demo-o
 
 ## 2. Policy API (依頼2 / 認証不要)
 
+**URL 形式の識別子はクエリ引数形式を推奨** (リバースプロキシがパス中の
+`%2F` を復号・スラッシュ正規化するため、パス形式は環境によって壊れる):
+
+```bash
+curl -sk "$API/policy?dataset_id=$DATASET_ENC" | jq .
+```
+
+パス形式 (分冊01 §4.2 の定義どおり) も使用可。`https:/`(スラッシュ1つ)に
+潰れた識別子はサーバ側で自動修復する:
+
 ```bash
 curl -sk "$API/datasets/$DATASET_ENC/policy" | jq .
 ```
@@ -139,9 +149,10 @@ GP=$(curl -sk -X POST "$W/holders/$SUB/credentials/$WC/present" \
   -d "{\"aud\":\"$PUB\"}" | jq -r .presentation)
 
 # 6-3. access-token (Presentation 検証 → 署名付きURL)
-RESP=$(curl -sk -X POST "$API/datasets/$DATASET_ENC/access-token" \
+#      dataset_id はボディで渡す形式を推奨 (§2 と同じ理由)
+RESP=$(curl -sk -X POST "$API/access-token" \
   -H "Authorization: Bearer $DELEG_TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"presentation\":\"$GP\"}")
+  -d "{\"dataset_id\":\"$DATASET\",\"presentation\":\"$GP\"}")
 echo $RESP | jq .
 DL=$(echo $RESP | jq -r .download_url)
 
@@ -155,9 +166,9 @@ echo $RESP | jq -r .checksum.value      # 一致すること
 
 ```bash
 # 同じ Presentation の再提示 → 409 presentation_replayed
-curl -sk -X POST "$API/datasets/$DATASET_ENC/access-token" \
+curl -sk -X POST "$API/access-token" \
   -H "Authorization: Bearer $DELEG_TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"presentation\":\"$GP\"}" | jq .title
+  -d "{\"dataset_id\":\"$DATASET\",\"presentation\":\"$GP\"}" | jq .title
 # トークンなし → 401
 curl -sk -X POST "$API/applications" -d '{}' \
   -H 'Content-Type: application/json' | jq .title
