@@ -17,7 +17,7 @@ from .auth import (AuthError, jwk_to_public_key, require_rags_token,
 from .models import (DacAgreement, DacApplication, DacMessage, DacOffer,
                      DacPresentationJti, DacVisa)
 
-blueprint_wellknown = Blueprint('weko_dac_wellknown', __name__)
+blueprint_wellknown = Blueprint('weko_dac_wellknown', __name__, template_folder='templates')
 
 blueprint_api = Blueprint('weko_dac_api', __name__, url_prefix='/dac/v1')
 
