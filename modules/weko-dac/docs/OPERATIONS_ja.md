@@ -82,6 +82,7 @@ WEKO の nginx コンテナ同梱 SP を使用。変更ファイルと要点:
 |---|---|
 | `nginx/shibboleth2.xml` | SP entityID `https://163.220.178.140/shibboleth-sp` / `<SSO entityID>` = IdP realm (`https://163.220.178.141/auth/realms/rdc`、discovery 削除) / `handlerSSL="true" cookieProps="https"` / **`handlerURL="https://163.220.178.140/Shibboleth.sso"` (絶対URL — ACS がホスト名検出に依存しない)** / **RequestMap の `<Host name>` = `163.220.178.140`** (不一致だと /secure/ が素通りし「Missing Shib-Session-ID!」になる) / orthros の MetadataProvider は無効化 |
 | `nginx/idp-metadata.xml` | `curl -k https://163.220.178.141/auth/realms/rdc/protocol/saml/descriptor` で取得したもの |
+| `nginx/attribute-map.xml` | eppn の ScopedAttributeDecoder を外し単純文字列属性に変更。Keycloak の IdP メタデータに shibmd:Scope が無く、スコープ検証で eppn が破棄されログインループになるため (**デモ環境限定の緩和**。学認本番接続時は既定に戻す) |
 | `nginx/weko.conf` | `server_name 163.220.178.140;` / `NO_CHECK_WEKOSOCIETYAFFILIATION TRUE` |
 | `scripts/instance.cfg` (テンプレート末尾) | `WEKO_ACCOUNTS_SHIB_LOGIN_ENABLED = True` / `WEKO_ACCOUNTS_SHIB_IDP_LOGIN_ENABLED = True` / `WEKO_ACCOUNTS_SHIB_IDP_LOGIN_URL = '{}secure/login.py'` / `WEKO_ACCOUNTS_SSO_ATTRIBUTE_MAP = {'eppn': (True,'shib_eppn'), 'mail': (False,'shib_mail'), 'DisplayName': (False,'shib_user_name')}` — **重要**: entrypoint が毎起動時に本テンプレートから invenio.cfg を再生成するため、invenio.cfg への手書き追記は再起動で消える。恒久設定は必ずテンプレート側に書く |
 

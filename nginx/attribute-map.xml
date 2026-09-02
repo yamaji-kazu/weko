@@ -18,12 +18,10 @@
     </Attribute>
 
     <!-- The most typical eduPerson attributes. -->
-    <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.1.1.6" id="eppn">
-        <AttributeDecoder xsi:type="ScopedAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
-    <Attribute name="urn:mace:dir:attribute-def:eduPersonPrincipalName" id="eppn">
-        <AttributeDecoder xsi:type="ScopedAttributeDecoder" caseSensitive="false"/>
-    </Attribute>
+    <!-- DEMO: Keycloak メタデータに shibmd:Scope が無くスコープ検証で
+         eppn が破棄されるため、デモ環境限定でスコープ検証なしに緩和 -->
+    <Attribute name="urn:oid:1.3.6.1.4.1.5923.1.1.1.6" id="eppn"/>
+    <Attribute name="urn:mace:dir:attribute-def:eduPersonPrincipalName" id="eppn"/>
 
       
 
