@@ -83,7 +83,7 @@ WEKO の nginx コンテナ同梱 SP を使用。変更ファイルと要点:
 | `nginx/shibboleth2.xml` | SP entityID `https://163.220.178.140/shibboleth-sp` / `<SSO entityID>` = IdP realm (`https://163.220.178.141/auth/realms/rdc`、discovery 削除) / `handlerSSL="true" cookieProps="https"` / **`handlerURL="https://163.220.178.140/Shibboleth.sso"` (絶対URL — ACS がホスト名検出に依存しない)** / **RequestMap の `<Host name>` = `163.220.178.140`** (不一致だと /secure/ が素通りし「Missing Shib-Session-ID!」になる) / orthros の MetadataProvider は無効化 |
 | `nginx/idp-metadata.xml` | `curl -k https://163.220.178.141/auth/realms/rdc/protocol/saml/descriptor` で取得したもの |
 | `nginx/weko.conf` | `server_name 163.220.178.140;` / `NO_CHECK_WEKOSOCIETYAFFILIATION TRUE` |
-| instance/conf/invenio.cfg (末尾追記) | `WEKO_ACCOUNTS_SHIB_LOGIN_ENABLED = True` / `WEKO_ACCOUNTS_SHIB_IDP_LOGIN_ENABLED = True` / `WEKO_ACCOUNTS_SHIB_IDP_LOGIN_URL = '{}secure/login.py'` / `WEKO_ACCOUNTS_SSO_ATTRIBUTE_MAP = {'eppn': (True,'shib_eppn'), 'mail': (False,'shib_mail'), 'DisplayName': (False,'shib_user_name')}` |
+| `scripts/instance.cfg` (テンプレート末尾) | `WEKO_ACCOUNTS_SHIB_LOGIN_ENABLED = True` / `WEKO_ACCOUNTS_SHIB_IDP_LOGIN_ENABLED = True` / `WEKO_ACCOUNTS_SHIB_IDP_LOGIN_URL = '{}secure/login.py'` / `WEKO_ACCOUNTS_SSO_ATTRIBUTE_MAP = {'eppn': (True,'shib_eppn'), 'mail': (False,'shib_mail'), 'DisplayName': (False,'shib_user_name')}` — **重要**: entrypoint が毎起動時に本テンプレートから invenio.cfg を再生成するため、invenio.cfg への手書き追記は再起動で消える。恒久設定は必ずテンプレート側に書く |
 
 IdP 側 (Keycloak realm rdc): SAML クライアント
 (Client ID = SP entityID、redirect `https://163.220.178.140/Shibboleth.sso/*`、
@@ -112,7 +112,9 @@ docker-compose2.yml の **web と worker 両方**の environment に設定:
 
 初期化 (初回のみ): `pip install -e /code/modules/weko-dac` → `invenio dac init`
 (テーブル + ES256 署名鍵 `<instance>/data/dac_es256.pem`)。
-コンテナを**再作成した場合は pip install -e の再実行が必要** (venv はコンテナ層のため)。
+weko-dac のインストールは `scripts/entrypoint_web.sh` / `entrypoint_worker.sh`
+で毎起動時に保証される (コンテナ再作成で venv が消える対策。2026-09-02 の
+API 全 404 障害の再発防止)。
 
 ## 6. 定常運用
 
@@ -135,4 +137,5 @@ docker-compose2.yml の **web と worker 両方**の environment に設定:
 | Shibboleth で Missing Shib-Session-ID | RequestMap の Host 名不一致 → §4 |
 | SAML で Invalid Request (Keycloak) | Client signature required ON / Client ID 不一致 / ACS ホスト名 → §4 |
 | Wallet deposit 失敗のまま | dac pump が自動再送。SECRET/URL/CA バンドル確認 |
-| コンテナ再作成後に dac コマンド消失 | pip install -e を再実行 (§5) |
+| /api/dac/v1 が全パス 404 (Werkzeug 定型文) | weko-dac 未インストール状態で起動 (コンテナ再作成後など)。entrypoint の自動インストール導入後は発生しないはずだが、発生時は `pip show weko-dac` を確認し `pip install -e` → restart |
+| 再起動後に invenio.cfg の設定が消える | entrypoint が `scripts/instance.cfg` から再生成するため。恒久設定はテンプレート側に書く (§4/§5) |
