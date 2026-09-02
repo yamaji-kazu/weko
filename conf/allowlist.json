@@ -1,0 +1,62 @@
+{
+  "trust_anchor": "demo-static-v1",
+  "updated": "2026-08-31",
+  "entities": [
+    {
+      "entity_id": "https://163.220.178.140",
+      "role": "agent:dac",
+      "jwks": { "keys": [] },
+      "jwks_uri": "https://163.220.178.140/api/dac/v1/visa-jwks.json",
+      "status": "confirmed",
+      "note": "DEMO-24 §3: 検証側は inline jwks を優先。公開基盤チームに公開鍵 (JWK) の提供を依頼し keys に転記すること"
+    },
+    {
+      "entity_id": "https://163.220.178.112/agents/dar-001",
+      "role": "agent:requester",
+      "jwks": { "keys": [] },
+      "jwks_uri": null,
+      "status": "confirmed",
+      "note": "DEMO-20 §5 P9 で確定 (2026-08-31、DG 確認済み)。エージェントのトークンはデモ IdP (Keycloak realm rdc) 発行の Bearer であり、検証は realm の JWKS で行う"
+    },
+    {
+      "entity_id": "https://163.220.178.141/wallet",
+      "role": "wallet",
+      "jwks": {
+        "keys": [
+          {
+            "kty": "EC",
+            "x": "oz0xMUNvdl1cDsgj0t1UPXb6xIHv8O2Xd9UfhB4oqRo",
+            "y": "YLAhw-B17tQWQ1apthPAy8ES1g3Vj7nVOnsGSffb2yM",
+            "crv": "P-256",
+            "kid": "wallet-es256-1",
+            "alg": "ES256",
+            "use": "sig"
+          }
+        ]
+      },
+      "jwks_uri": "https://163.220.178.141/wallet/.well-known/jwks.json",
+      "status": "confirmed",
+      "note": "Grant Wallet (DEMO-11)。Grant Presentation (typ=rdc-gp+jwt) の検証鍵"
+    },
+    {
+      "entity_id": "https://163.220.178.141/visa-issuer",
+      "role": "visa_issuer",
+      "jwks": {
+        "keys": [
+          {
+            "kty": "EC",
+            "x": "vJeDkeH61fIuLJRnvap95LaVqpkXmR_UF_qiSgRFoow",
+            "y": "r5hrVUUtfWgu0pJIY9N9K_cQwdYyAS8JDhmdRMgqoQc",
+            "crv": "P-256",
+            "kid": "demo-visa-1",
+            "alg": "ES256",
+            "use": "sig"
+          }
+        ]
+      },
+      "jwks_uri": null,
+      "status": "confirmed",
+      "note": "固定 Visa (AffiliationAndRole) の発行者 (DEMO-24 作業4)"
+    }
+  ]
+}
