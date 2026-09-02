@@ -5,7 +5,11 @@
     {
       "entity_id": "https://163.220.178.140",
       "role": "agent:dac",
-      "jwks": { "keys": [] },
+      "jwks": {
+        "keys": [
+			{"alg":"ES256","crv":"P-256","kid":"dac-key-1","kty":"EC","use":"sig","x":"vU3RqZD_pqr8DDOiCUn1koNTnIod2PfLJDDNe0lc2c0","y":"p_zSzmldA4a7xalktw8C8A9dxUydVRGo8xmZ0WvhxFo"}
+		]
+      },
       "jwks_uri": "https://163.220.178.140/api/dac/v1/visa-jwks.json",
       "status": "confirmed",
       "note": "DEMO-24 §3: 検証側は inline jwks を優先。公開基盤チームに公開鍵 (JWK) の提供を依頼し keys に転記すること"
@@ -13,10 +17,12 @@
     {
       "entity_id": "https://163.220.178.112/agents/dar-001",
       "role": "agent:requester",
-      "jwks": { "keys": [] },
+      "jwks": {
+        "keys": []
+      },
       "jwks_uri": null,
       "status": "confirmed",
-      "note": "DEMO-20 §5 P9 で確定 (2026-08-31、DG 確認済み)。エージェントのトークンはデモ IdP (Keycloak realm rdc) 発行の Bearer であり、検証は realm の JWKS で行う"
+      "note": "DEMO-20 §5 P9 で確定 (2026-08-31、DG 確認済み)。Keycloak の act.sub マッパーと DG の DAR_AGENT_ENTITY_ID が同一文字列であることを結合テスト前に確認すること。jwks_uri は DG がトークン発行者にならないため null のまま。エージェントのトークンはデモ IdP (Keycloak realm rdc) 発行の Bearer であり、検証は https://163.220.178.141/auth/realms/rdc/protocol/openid-connect/certs で行う"
     },
     {
       "entity_id": "https://163.220.178.141/wallet",
@@ -36,7 +42,7 @@
       },
       "jwks_uri": "https://163.220.178.141/wallet/.well-known/jwks.json",
       "status": "confirmed",
-      "note": "Grant Wallet (DEMO-11)。Grant Presentation (typ=rdc-gp+jwt) の検証鍵"
+      "note": "Grant Wallet (DEMO-11)。Grant Presentation (typ=rdc-gp+jwt) の検証鍵。inline jwks は下の python コマンドで自動転記可"
     },
     {
       "entity_id": "https://163.220.178.141/visa-issuer",
@@ -52,11 +58,11 @@
             "alg": "ES256",
             "use": "sig"
           }
-        ]
+	]
       },
       "jwks_uri": null,
       "status": "confirmed",
-      "note": "固定 Visa (AffiliationAndRole) の発行者 (DEMO-24 作業4)"
+      "note": "固定 Visa (AffiliationAndRole) の発行者 (DEMO-24 作業4)。keys は rdc-grant-wallet の scripts/issue-visa.mjs --jwk の出力 (IdP サーバの手順5) を転記して confirmed にすること"
     }
   ]
 }
