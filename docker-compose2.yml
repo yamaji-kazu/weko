@@ -49,6 +49,8 @@ services:
       - INVENIO_WEB_HOST_NAME=163.220.178.140
       - WEKO_DAC_ENTITY_ID=https://163.220.178.140
       - WEKO_DAC_TLS_CA_BUNDLE=/code/tls/bundle.crt
+      - WEKO_DAC_OIDC_ISSUER=https://163.220.178.141/auth/realms/rdc
+      - WEKO_DAC_OIDC_JWKS_URL=https://163.220.178.141/auth/realms/rdc/protocol/openid-connect/certs
       - INVENIO_WEB_PROTOCOL=https
       - INVENIO_USER_EMAIL=wekosoftware@nii.ac.jp
       - INVENIO_USER_PASS=uspass123
@@ -191,6 +193,8 @@ services:
       - INVENIO_WEB_HOST_NAME=163.220.178.140
       - WEKO_DAC_ENTITY_ID=https://163.220.178.140
       - WEKO_DAC_TLS_CA_BUNDLE=/code/tls/bundle.crt
+      - WEKO_DAC_OIDC_ISSUER=https://163.220.178.141/auth/realms/rdc
+      - WEKO_DAC_OIDC_JWKS_URL=https://163.220.178.141/auth/realms/rdc/protocol/openid-connect/certs
       - INVENIO_WEB_PROTOCOL=https
       - INVENIO_USER_EMAIL=wekosoftware@nii.ac.jp
       - INVENIO_USER_PASS=uspass123
