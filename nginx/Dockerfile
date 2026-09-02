@@ -58,7 +58,7 @@ RUN sed -i 's/\/run\/php/\/tmp/g' /etc/php/7.4/fpm/pool.d/www.conf
 
 ADD ./keys/server.crt /etc/shibboleth/server.crt
 ADD ./keys/server.key /etc/shibboleth/server.key
-RUN chown _shibd:_shibd /etc/shibboleth/server.key && chmod 400 /etc/shibboleth/server.key
+RUN chmod 600 /etc/shibboleth/server.key
 
 
 RUN rm /etc/nginx/conf.d/default.conf
