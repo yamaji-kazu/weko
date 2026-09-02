@@ -179,6 +179,15 @@ WEKO_ACCOUNTS_SHIB_DP_LOGIN_DIRECTLY_ENABLED = True
 
 WEKO_ACCOUNTS_SHIB_ALLOW_USERNAME_INST_EPPN = True
 """Allow using SHIB_ATTR_USER_NAME instead of SHIB_ATTR_EPPN."""
+
+WEKO_ACCOUNTS_SHIB_KEEP_LOCAL_ROLES = False
+"""Keep WEKO-managed roles on SSO login.
+
+When True and the IdP sends no affiliation (shib_role_authority_name) and
+mAP group binding is disabled, ``check_in`` skips clearing/reassigning
+roles so that roles granted in the WEKO admin console survive SSO logins.
+Default False preserves the original IdP-driven role behavior.
+"""
 WEKO_ACCOUNTS_LOGIN_LABEL = 'Log in to account'
 """The login label"""
 

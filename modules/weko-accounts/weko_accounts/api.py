@@ -313,6 +313,20 @@ class ShibUser(object):
         :return:
 
         """
+        # デモ運用ガード:
+        # IdP が affiliation (shib_role_authority_name) を送らず、mAP グループ
+        # 連携も無効な環境では、ロール管理を WEKO 管理画面側で行う。この場合に
+        # SSO ログインのたびにロールを全消去すると、手動付与した権限
+        # (例: Repository Administrator) が毎回失われるため、
+        # WEKO_ACCOUNTS_SHIB_KEEP_LOCAL_ROLES=True のときはロール操作を行わない。
+        if current_app.config.get('WEKO_ACCOUNTS_SHIB_KEEP_LOCAL_ROLES'):
+            _affiliation = (
+                self.shib_attr.get('shib_role_authority_name') or '').strip()
+            _map_groups = current_app.config.get(
+                'WEKO_ACCOUNTS_SHIB_BIND_GAKUNIN_MAP_GROUPS')
+            if not _affiliation and not _map_groups:
+                return None
+
         #ログインユーザーのロールをクリアする
         self.user.roles.clear()
         check_role, error = self.assign_user_role()
