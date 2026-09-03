@@ -359,7 +359,10 @@ def _verify_presentation(presentation, dataset_id):
     if typ not in handlers:
         raise AuthError(400, 'unsupported_presentation_type',
                         'typ %s not accepted' % typ)
-    entity_id = current_app.config['WEKO_DAC_ENTITY_ID']
+    # Expected Presentation audience (§6.3). Defaults to the DAC identifier
+    # (WEKO_DAC_PRESENTATION_AUD → WEKO_DAC_DAC_ID); agreed with DG/Wallet.
+    entity_id = current_app.config.get('WEKO_DAC_PRESENTATION_AUD') \
+        or current_app.config['WEKO_DAC_ENTITY_ID']
     # Wallet trust: static allowlist (DEMO-24 §3) supplies the wallet's
     # jwks (inline or by jwks_uri); config URL is the fallback.
     inline_keys = allowlist.wallet_inline_jwks()
@@ -530,10 +533,17 @@ def _access_token_impl(raw_dataset_id):
     return jsonify({
         'download_url': '{0}/api/dac/v1/download?token={1}'.format(
             current_app.config['WEKO_DAC_ENTITY_ID'], token),
+        'file_name': _distribution_file_name(offer_row),
         'expires_in': current_app.config['WEKO_DAC_DOWNLOAD_URL_TTL'],
         'checksum': ({'algorithm': 'sha256', 'value': offer_row.checksum}
                      if offer_row.checksum else None),
     })
+
+
+def _distribution_file_name(offer_row):
+    """Best-effort file name from the Offer's distribution URI (path or URL)."""
+    uri = (offer_row.distribution_uri or '').split('?')[0].rstrip('/')
+    return uri.rsplit('/', 1)[-1] if uri else None
 
 
 @blueprint_api.route('/download', methods=['GET'])

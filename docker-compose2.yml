@@ -52,6 +52,8 @@ services:
       - WEKO_DAC_OIDC_ISSUER=https://163.220.178.141/auth/realms/rdc
       - WEKO_DAC_OIDC_JWKS_URL=https://163.220.178.141/auth/realms/rdc/protocol/openid-connect/certs
       - WEKO_DAC_ALLOWLIST_PATH=/code/conf/allowlist.json
+      - WEKO_DAC_TOKEN_URL=https://163.220.178.141/auth/realms/rdc/protocol/openid-connect/token
+      - WEKO_DAC_CLIENT_SECRET=${DAC_SERVICE_SECRET}
       - INVENIO_WEB_PROTOCOL=https
       - INVENIO_USER_EMAIL=wekosoftware@nii.ac.jp
       - INVENIO_USER_PASS=uspass123
@@ -197,6 +199,8 @@ services:
       - WEKO_DAC_OIDC_ISSUER=https://163.220.178.141/auth/realms/rdc
       - WEKO_DAC_OIDC_JWKS_URL=https://163.220.178.141/auth/realms/rdc/protocol/openid-connect/certs
       - WEKO_DAC_ALLOWLIST_PATH=/code/conf/allowlist.json
+      - WEKO_DAC_TOKEN_URL=https://163.220.178.141/auth/realms/rdc/protocol/openid-connect/token
+      - WEKO_DAC_CLIENT_SECRET=${DAC_SERVICE_SECRET}
       - INVENIO_WEB_PROTOCOL=https
       - INVENIO_USER_EMAIL=wekosoftware@nii.ac.jp
       - INVENIO_USER_PASS=uspass123
