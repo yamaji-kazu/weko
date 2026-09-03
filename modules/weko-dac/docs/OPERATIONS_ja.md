@@ -170,9 +170,21 @@ docker-compose2.yml の **web と worker 両方**の environment に設定:
 | WEKO_DAC_ALLOWLIST_PATH | `/code/<配布された allowlist.json>` | DEMO-24 §3。visa_issuer / agent:requester / wallet の検証 |
 | WEKO_DAC_PASSPORT_ENFORCE | (既定 true) | false で Passport 検証を記録のみに緩和 (単体試験用) |
 | WEKO_DAC_SCOPE_OWNER_SUB_ONLY | (既定 false / デモ true) | 申請の閲覧スコープ(§5.4)。true で「研究者本人(トークン sub)は自分の申請を、委任エージェントに依らず閲覧可」。false は仕様どおり委任ペア(sub + act.sub)厳密一致 |
+| WEKO_DAC_PRESENTATION_AUD | (既定 = DAC_ID) | Presentation の `aud` 検証値。DG/Wallet と揃える。デモは `https://163.220.178.140/dacs/rdc-dac-001` |
+| WEKO_DAC_DOWNLOAD_URL_TTL | (既定 300 / デモ 900) | access-token が返す署名付き download_url の有効期限(秒) |
 
 これらは `WEKO_DAC_*` の Flask config で、`scripts/instance.cfg` テンプレート末尾に書く
-(環境変数でも可)。デモでは `WEKO_DAC_SCOPE_OWNER_SUB_ONLY = True` を設定している。
+(環境変数でも可)。デモでは `WEKO_DAC_SCOPE_OWNER_SUB_ONLY = True` /
+`WEKO_DAC_DOWNLOAD_URL_TTL = 900` / `WEKO_DAC_PRESENTATION_AUD = "https://163.220.178.140/dacs/rdc-dac-001"` を設定している。
+
+**callback の Bearer 認証は必須**。DG の callback 受口は認証必須 (無認証 POST は 401) のため、
+WEKO は `get_service_token()` で Keycloak の client_credentials トークンを取得して Bearer で送る。
+表の `WEKO_DAC_TOKEN_URL` / `WEKO_DAC_CLIENT_ID` (=dac-service) / `WEKO_DAC_CLIENT_SECRET` を
+**実際に設定する** (docker-compose2.yml の web/worker 両方の environment)。未設定だと無認証で送られ
+DG が 401 を返し、`dac_event_outbox.delivered_at` が永遠に空のままになる。
+シークレットはコミットしないよう `.env` (`DAC_SERVICE_SECRET`) に置き、compose 側は
+`- WEKO_DAC_CLIENT_SECRET=${DAC_SERVICE_SECRET}` と参照する。
+dac-service クライアントは Keycloak で **Service accounts (client_credentials) を有効**にしておく。
 
 初期化 (初回のみ): `pip install -e /code/modules/weko-dac` → `invenio dac init`
 (テーブル + ES256 署名鍵 `<instance>/data/dac_es256.pem`)。
@@ -206,6 +218,8 @@ API 全 404 障害の再発防止)。
 | Keycloak ログインで `AuthnFailed / authentication_expired` | Frontend URL が 141 でない or 利用者の仮パスワード/Required actions 残り → §4 |
 | Keycloak ログイン画面の CSS が崩れる | Frontend URL が 141 でなくリソースが 140/auth を指す → §4 (機能は通るが見た目のため要修正) |
 | 状態確認 `GET /applications/{id}` が 404 (存在するのに) | 所有者スコープ不一致。トークンの `sub`/`agent` が申請時と違う → デバッグは `_own_application_or_none` にログ、緩和は `WEKO_DAC_SCOPE_OWNER_SUB_ONLY` (§5)。エージェント代理は subject=研究者の委任トークンで |
-| Wallet deposit 失敗のまま | dac pump が自動再送。SECRET/URL/CA バンドル確認 |
+| callback の `delivered_at` が空のまま | (1) `WEKO_DAC_TOKEN_URL`/`CLIENT_SECRET` 未設定で無認証送信→DG が 401 (§5)。(2) DG の証明書が CA バンドル未登録で TLS 失敗。(3) 宛先(内部IP)へ到達不可。`docker compose exec web invenio dac pump` 後にログの `service token failed`/`callback delivery failed` を確認 |
+| callback が今すぐ再送されない | バックオフ待ち。`dac_event_outbox.next_attempt_at` が未来 (naive UTC 比較)。即時再送は `UPDATE dac_event_outbox SET next_attempt_at=now(), attempts=0 WHERE delivered_at IS NULL` → `invenio dac pump` |
+| Wallet deposit 失敗のまま | dac pump が自動再送。SECRET/URL/CA バンドル確認。`WEKO_DAC_WALLET_API_BASE` 未設定だと deposit されず Visa はアプリのリソース経由のみ |
 | /api/dac/v1 が全パス 404 (Werkzeug 定型文) | weko-dac 未インストール状態で起動 (コンテナ再作成後など)。entrypoint の自動インストール導入後は発生しないはずだが、発生時は `pip show weko-dac` を確認し `pip install -e` → restart |
 | 再起動後に invenio.cfg の設定が消える | entrypoint が `scripts/instance.cfg` から再生成するため。恒久設定はテンプレート側に書く (§4/§5) |

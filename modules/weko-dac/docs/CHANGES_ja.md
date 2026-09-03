@@ -103,6 +103,25 @@ Grant Wallet まで通す過程で判明した問題への対応。→ 詳細: `
 これにより「hanako 申請 → officer1 承認 → Agreement/Visa 発行 → Wallet deposit → DG callback
 (DG は写しを持たず Wallet 参照)」の一連が疎通 (DEMO-21 受入条件1: 申請〜deposit まで到達)。
 
+## 8. callback 実配送と access-token 応答の整備 (2026-09-03, 台本4完成〜台本5準備)
+
+DEMO-20 台本の 4 (許諾→callback) 完成と、台本5 (取得) の前提整備。
+→ 詳細: `docs/OPERATIONS_ja.md` §5、`README.rst` 主要 API
+
+- **callback の Bearer 認証**: DG の受口は認証必須 (無認証は 401)。WEKO は
+  `get_service_token()` で Keycloak の client_credentials トークンを取得し Bearer で送る。
+  `WEKO_DAC_TOKEN_URL` を設定、`WEKO_DAC_CLIENT_SECRET` は `.env` (`DAC_SERVICE_SECRET`) 参照。
+  未設定だと無認証送信→401→`dac_event_outbox.delivered_at` が空のまま、という障害になる
+- **callback 本体は平文 JSON** (`enqueue_event`)。認証はボディ署名ではなく Bearer で行う
+- **再送のバックオフは naive UTC 比較**。長時間失敗後は `next_attempt_at` が先へ延びるため、
+  即時再送は `UPDATE … SET next_attempt_at=now(), attempts=0` → `invenio dac pump`
+- **access-token 応答に `file_name` を追加** (DG が GRDM 格納時のファイル名に使用)
+- **Presentation の `aud` を DAC_ID に整合** (`WEKO_DAC_PRESENTATION_AUD`、既定
+  `https://163.220.178.140/dacs/rdc-dac-001`)。DG/Wallet と3者で一致させる値
+- **download_url は認証なしの期限付き URL**。`/api/dac/v1/download?token=<JWS>` は Bearer 不要で、
+  URL 内の署名トークン (`exp = iat + WEKO_DAC_DOWNLOAD_URL_TTL`、デモ 900 秒) が capability。
+  `checksum` は Offer に登録があれば sha256 で返す
+
 ## 既知の制約 / 本番移行時の課題
 
 README.rst「デモ簡略化」表のとおり。特に: Trust Chain/Trust Mark/DPoP は

@@ -130,6 +130,27 @@ Administrator 以外は「Permission required」)。IdP(Keycloak) 経由の審�
 
 dataset_id は URL エンコードして渡す (例: ``https%3A%2F%2Fdoi.org%2F10.yyyy%2Fdata.456``)。
 
+access-token の応答と callback (§6.3 / §5.7)
+============================================
+
+``POST /access-token`` の応答::
+
+   { "download_url": "https://<entity_id>/api/dac/v1/download?token=<JWS>",
+     "file_name": "data456.zip",
+     "expires_in": 900,
+     "checksum": { "algorithm": "sha256", "value": "<hex>" } }   // 無登録時 null
+
+- ``download_url`` は **認証なしの期限付き URL**。``/download`` は Bearer 不要で、
+  URL 内の署名トークン (``exp = iat + WEKO_DAC_DOWNLOAD_URL_TTL``) が capability。
+  取得側はこの URL を GET するだけ (委任トークンは不要)。ホストは ``WEKO_DAC_ENTITY_ID``
+  なので、取得側がそのホストに到達できること。
+- Presentation の ``aud`` は ``WEKO_DAC_PRESENTATION_AUD`` (既定 = DAC_ID) を検証。
+  Wallet の ``present`` はこの値を ``aud`` に入れる (DG/Wallet と3者一致)。
+- **callback** (``§5.7``, 状態遷移・agreement.issued 等) は DG の ``callback_url`` へ
+  平文 JSON を POST。認証は Keycloak client_credentials の Bearer
+  (``WEKO_DAC_TOKEN_URL`` / ``WEKO_DAC_CLIENT_ID`` / ``WEKO_DAC_CLIENT_SECRET``)。
+  再送は指数バックオフ (``invenio dac pump`` / celery beat)。
+
 ドキュメント
 ============
 
