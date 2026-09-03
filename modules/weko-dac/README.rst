@@ -150,6 +150,11 @@ access-token の応答と callback (§6.3 / §5.7)
   平文 JSON を POST。認証は Keycloak client_credentials の Bearer
   (``WEKO_DAC_TOKEN_URL`` / ``WEKO_DAC_CLIENT_ID`` / ``WEKO_DAC_CLIENT_SECRET``)。
   再送は指数バックオフ (``invenio dac pump`` / celery beat)。
+- **Grant Wallet 預け入れ** (``§6.2``): 許諾発行時に Visa を
+  ``POST {WEKO_DAC_WALLET_API_BASE}/holders/{holder}/credentials`` で登録
+  (holder = Visa subject = 研究者の Keycloak UUID、Bearer = client_credentials)。
+  未設定だと deposit されず callback の ``wallet_deposited``/``wallet_credential_id`` が null。
+  再送は ``invenio dac pump`` (``retry_wallet_deposits``)。
 
 ドキュメント
 ============

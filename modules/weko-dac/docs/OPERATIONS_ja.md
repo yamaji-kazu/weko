@@ -186,6 +186,16 @@ DG が 401 を返し、`dac_event_outbox.delivered_at` が永遠に空のまま�
 `- WEKO_DAC_CLIENT_SECRET=${DAC_SERVICE_SECRET}` と参照する。
 dac-service クライアントは Keycloak で **Service accounts (client_credentials) を有効**にしておく。
 
+**Grant Wallet への預け入れ (§6.2)**。許諾発行時、WEKO は Visa を Grant Wallet に deposit する。
+`WEKO_DAC_WALLET_API_BASE` (例 `https://163.220.178.141/wallet/api/wallet/v1`) が**未設定だと
+deposit されず**、callback の `wallet_deposited`/`wallet_credential_id` が null のままになる
+(Visa はアプリのリソース経由でのみ利用可のフォールバック)。呼び出しは
+`POST {base}/holders/{holder}/credentials`、**holder = Visa の subject = 研究者の Keycloak UUID**
+(アクセストークンの sub と同値)、Bearer は callback と同じ client_credentials トークン。
+本文は `type=ControlledAccessGrants` / `resource=dataset_id` / `issuer` / `visa_jwt` /
+`agreement_uid` / `valid_from` / `valid_until`。既発行分の再送は `invenio dac pump`
+(`retry_wallet_deposits`)。成功で `dac_visa.wallet_deposited=t` と `wallet_credential_id` が入る。
+
 初期化 (初回のみ): `pip install -e /code/modules/weko-dac` → `invenio dac init`
 (テーブル + ES256 署名鍵 `<instance>/data/dac_es256.pem`)。
 weko-dac のインストールは `scripts/entrypoint_web.sh` / `entrypoint_worker.sh`

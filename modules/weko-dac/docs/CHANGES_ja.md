@@ -121,6 +121,11 @@ DEMO-20 台本の 4 (許諾→callback) 完成と、台本5 (取得) の前提�
 - **download_url は認証なしの期限付き URL**。`/api/dac/v1/download?token=<JWS>` は Bearer 不要で、
   URL 内の署名トークン (`exp = iat + WEKO_DAC_DOWNLOAD_URL_TTL`、デモ 900 秒) が capability。
   `checksum` は Offer に登録があれば sha256 で返す
+- **Grant Wallet への預け入れ (§6.2)**: `WEKO_DAC_WALLET_API_BASE` を設定し、既発行 Visa を
+  `invenio dac pump` で deposit。`POST {base}/holders/{UUID}/credentials`、holder=研究者の
+  Keycloak UUID (=Visa subject=token sub)、Bearer は client_credentials。成功で
+  `wallet_deposited=t`・`wallet_credential_id` が入り、DG は agreement_uid か credential_id で拾える。
+  未設定だと deposit されず callback の該当フィールドが null のままになる (台本4→5 の詰まり要因)
 
 ## 既知の制約 / 本番移行時の課題
 
