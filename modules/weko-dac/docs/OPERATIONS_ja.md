@@ -3,7 +3,7 @@
 - 対象サーバ: WEKO デモ環境 (mdx VM, Ubuntu 22.04, `~/dev/weko`)
 - グローバル IP: `163.220.178.140` / 内部網 IP: `10.20.116.19`
 - 関連: IdP/Wallet = `163.220.178.141` (内部網あり)、DG = `163.220.178.112`
-- 最終更新: 2026-08-31
+- 最終更新: 2026-09-03
 
 チャット・口頭でしか残っていなかった環境設定を集約したもの。
 **環境を再構築する場合は本書の順に実施する。**
@@ -84,16 +84,75 @@ WEKO の nginx コンテナ同梱 SP を使用。変更ファイルと要点:
 | `nginx/idp-metadata.xml` | `curl -k https://163.220.178.141/auth/realms/rdc/protocol/saml/descriptor` で取得したもの |
 | `nginx/attribute-map.xml` | eppn の ScopedAttributeDecoder を外し単純文字列属性に変更。Keycloak の IdP メタデータに shibmd:Scope が無く、スコープ検証で eppn が破棄されログインループになるため (**デモ環境限定の緩和**。学認本番接続時は既定に戻す) |
 | `nginx/weko.conf` | `server_name 163.220.178.140;` / `NO_CHECK_WEKOSOCIETYAFFILIATION TRUE` |
-| `scripts/instance.cfg` (テンプレート末尾) | `WEKO_ACCOUNTS_SHIB_LOGIN_ENABLED = True` / `WEKO_ACCOUNTS_SHIB_IDP_LOGIN_ENABLED = True` / `WEKO_ACCOUNTS_SHIB_IDP_LOGIN_URL = '{}secure/login.py'` / `WEKO_ACCOUNTS_SSO_ATTRIBUTE_MAP = {'eppn': (True,'shib_eppn'), 'mail': (False,'shib_mail'), 'DisplayName': (False,'shib_user_name')}` — **重要**: entrypoint が毎起動時に本テンプレートから invenio.cfg を再生成するため、invenio.cfg への手書き追記は再起動で消える。恒久設定は必ずテンプレート側に書く |
+| `scripts/instance.cfg` (テンプレート末尾) | `WEKO_ACCOUNTS_SHIB_LOGIN_ENABLED = True` / `WEKO_ACCOUNTS_SHIB_IDP_LOGIN_ENABLED = True` / `WEKO_ACCOUNTS_SHIB_IDP_LOGIN_URL = '{}secure/login.py'` / `WEKO_ACCOUNTS_SSO_ATTRIBUTE_MAP`（下記）/ `WEKO_ACCOUNTS_SHIB_KEEP_LOCAL_ROLES = True` — **重要**: entrypoint が毎起動時に本テンプレートから invenio.cfg を再生成するため、invenio.cfg への手書き追記は再起動で消える。恒久設定は必ずテンプレート側に書く |
 
-IdP 側 (Keycloak realm rdc): SAML クライアント
-(Client ID = SP entityID、redirect `https://163.220.178.140/Shibboleth.sso/*`、
-Client signature required OFF、mapper: eppn/mail/displayName → urn:oid)。
+**SSO 属性マップは最小化しすぎない**。`WEKO_ACCOUNTS_SSO_ATTRIBUTE_MAP` を eppn/mail/DisplayName の3つだけに絞ると、`get_relation_info()` が `shib_attr['shib_role_authority_name']` で KeyError → 例外捕捉で None を返し、**連携済みユーザーでも毎回 confirm(紐づけ)画面に落ちる**。IdP が送らなくても「キーだけ空文字で用意される」よう、下記を含める。
+
+```python
+WEKO_ACCOUNTS_SSO_ATTRIBUTE_MAP = {
+    'eppn': (True,  'shib_eppn'),
+    'mail': (False, 'shib_mail'),
+    'DisplayName': (False, 'shib_user_name'),
+    'SHIB_ATTR_ROLE_AUTHORITY_NAME': (False, 'shib_role_authority_name'),
+    'SHIB_ATTR_SITE_USER_WITHIN_IP_RANGE_FLAG': (False, 'shib_ip_range_flag'),
+}
+WEKO_ACCOUNTS_SHIB_KEEP_LOCAL_ROLES = True
+```
+
+`WEKO_ACCOUNTS_SHIB_KEEP_LOCAL_ROLES = True` は、IdP が affiliation を送らない本構成で **SSO ログインのたびに `check_in()` がロールを全消去**して手動付与ロール(例: Repository Administrator)が消える問題を回避する (weko-accounts に追加したガード。affiliation か mAP グループ連携がある場合は従来動作)。
+
+IdP 側 (Keycloak realm rdc) の要点:
+- SAML クライアント: Client ID = SP entityID、redirect `https://163.220.178.140/Shibboleth.sso/*`、
+  Client signature required OFF、mapper: eppn/mail/displayName → urn:oid。
+- **Frontend URL は 141 に固定**。Realm Settings → General → Frontend URL = `https://163.220.178.141/auth`
+  (旧世代 Keycloak。新世代は `KC_HOSTNAME`)。ここが 140 だと、SSO は 141 に飛ぶのに
+  ログイン画面の CSS・フォーム送信先・Cookie が 140 側になり、認証セッションを見失って
+  **`AuthnFailed / authentication_expired`** になる (CSS 崩れも同原因)。
+  確認: `curl -sk https://163.220.178.141/auth/realms/rdc/.well-known/openid-configuration`
+  の各エンドポイントが **141** を指すこと。
+- **利用者を新規に作る際**は Credentials で **Temporary=OFF**、Details の
+  **Required user actions を空**、**Email verified=ON**、**Enabled=ON** にする。
+  仮パスワードや Verify Email が残ると追加フォームを挟み、崩れた画面で完了できず
+  `authentication_expired` の原因になる。
 
 nginx 設定はイメージにベイクされるため、変更時は `build nginx` → `up -d nginx`。
-入口: `https://163.220.178.140/secure/login.py`。初回ログインユーザーはロールなしで
-作成されるので、管理画面でロール付与。
+入口: `https://163.220.178.140/secure/login.py`。初回ログインは confirm(紐づけ)画面が出るので
+既存 WEKO アカウントに紐づける (下記 §4.1)。
+
 デバッグ: `docker compose -f docker-compose2.yml exec nginx tail /var/log/shibboleth/shibd.log`
+
+### 4.1 アカウントとロール (審査担当・利用者)
+
+デモの役割分担: **hanako = 利用者/申請者**、**officer1 = WEKO の DAC 審査担当**。
+いずれも Keycloak(IdP) 経由でログインし、初回に既存 WEKO アカウントへ紐づける。
+
+審査担当(officer1)を IdP で用意する手順:
+
+```bash
+# WEKO 側: DAC Officer ロール + admin-access + 紐づけ先アカウント
+docker compose -f docker-compose2.yml exec -T web invenio roles create "DAC Officer"
+docker compose -f docker-compose2.yml exec -T web \
+  invenio access allow admin-access role "DAC Officer"
+docker compose -f docker-compose2.yml exec -T web \
+  invenio users create officer1@nii.ac.jp --password '<pw>' --active
+docker compose -f docker-compose2.yml exec -T web \
+  invenio roles add officer1@nii.ac.jp "DAC Officer"
+```
+
+Keycloak 側で officer1 を作成 (Email は上の WEKO アカウントと一致させる、eppn 属性は
+hanako と同じ属性キーで設定、Temporary=OFF)。officer1 で `/secure/login.py` からログインし、
+confirm 画面で `officer1@nii.ac.jp` + WEKO パスワードを入力して**既存アカウントに紐づけ**る
+(「Create New ID」は押さない)。
+
+- 審査コンソールに入れるロールは `WEKO_DAC_OFFICER_ROLES`
+  (既定: System Administrator / Repository Administrator / DAC Officer)。
+- これらのロールが管理画面(DAC タブ + 管理トップ)に入れるよう、weko-dac 拡張が起動時に
+  **`WEKO_ADMIN_ACCESS_TABLE` へ `admin` / `dac/applications` / `dac/offers` を自動登録**する
+  (weko-admin は全 admin ビューの `is_accessible` を `role_has_access` に上書きするため、
+  DAC 独自の `is_officer` だけでは 403 になる。この登録が無いと System Administrator 以外は
+  「Permission required」)。
+- 連携時に WEKO アカウントのメールは Keycloak の Email に書き換わるが、ロールはユーザーに
+  紐づくので残る (KEEP_LOCAL_ROLES により SSO 再ログインでも消えない)。
 
 ## 5. weko-dac の接続設定
 
@@ -110,6 +169,10 @@ docker-compose2.yml の **web と worker 両方**の environment に設定:
 | WEKO_DAC_TLS_CA_BUNDLE | `/code/tls/bundle.crt` | 自己署名証明書の信頼。**IdP・DG など通信相手の crt を連結**して置く |
 | WEKO_DAC_ALLOWLIST_PATH | `/code/<配布された allowlist.json>` | DEMO-24 §3。visa_issuer / agent:requester / wallet の検証 |
 | WEKO_DAC_PASSPORT_ENFORCE | (既定 true) | false で Passport 検証を記録のみに緩和 (単体試験用) |
+| WEKO_DAC_SCOPE_OWNER_SUB_ONLY | (既定 false / デモ true) | 申請の閲覧スコープ(§5.4)。true で「研究者本人(トークン sub)は自分の申請を、委任エージェントに依らず閲覧可」。false は仕様どおり委任ペア(sub + act.sub)厳密一致 |
+
+これらは `WEKO_DAC_*` の Flask config で、`scripts/instance.cfg` テンプレート末尾に書く
+(環境変数でも可)。デモでは `WEKO_DAC_SCOPE_OWNER_SUB_ONLY = True` を設定している。
 
 初期化 (初回のみ): `pip install -e /code/modules/weko-dac` → `invenio dac init`
 (テーブル + ES256 署名鍵 `<instance>/data/dac_es256.pem`)。
@@ -137,6 +200,12 @@ API 全 404 障害の再発防止)。
 | 申請が 403 agent_not_allowlisted | allowlist の agent:requester に エージェントID がない |
 | Shibboleth で Missing Shib-Session-ID | RequestMap の Host 名不一致 → §4 |
 | SAML で Invalid Request (Keycloak) | Client signature required ON / Client ID 不一致 / ACS ホスト名 → §4 |
+| 連携済みなのに毎回 confirm(紐づけ)画面に戻る | SSO 属性マップに `shib_role_authority_name` が無く `get_relation_info` が KeyError → §4 のマップに補完 |
+| SSO ログインのたびにロールが消える | `check_in()` のロール全消去。`WEKO_ACCOUNTS_SHIB_KEEP_LOCAL_ROLES = True` → §4 |
+| DAC 画面/管理画面が「Permission required」(403) | ロールが `WEKO_DAC_OFFICER_ROLES` に無い、または `WEKO_ADMIN_ACCESS_TABLE` に DAC/`admin` 未登録 → §4.1 (拡張が自動登録。再起動で反映) |
+| Keycloak ログインで `AuthnFailed / authentication_expired` | Frontend URL が 141 でない or 利用者の仮パスワード/Required actions 残り → §4 |
+| Keycloak ログイン画面の CSS が崩れる | Frontend URL が 141 でなくリソースが 140/auth を指す → §4 (機能は通るが見た目のため要修正) |
+| 状態確認 `GET /applications/{id}` が 404 (存在するのに) | 所有者スコープ不一致。トークンの `sub`/`agent` が申請時と違う → デバッグは `_own_application_or_none` にログ、緩和は `WEKO_DAC_SCOPE_OWNER_SUB_ONLY` (§5)。エージェント代理は subject=研究者の委任トークンで |
 | Wallet deposit 失敗のまま | dac pump が自動再送。SECRET/URL/CA バンドル確認 |
 | /api/dac/v1 が全パス 404 (Werkzeug 定型文) | weko-dac 未インストール状態で起動 (コンテナ再作成後など)。entrypoint の自動インストール導入後は発生しないはずだが、発生時は `pip show weko-dac` を確認し `pip install -e` → restart |
 | 再起動後に invenio.cfg の設定が消える | entrypoint が `scripts/instance.cfg` から再生成するため。恒久設定はテンプレート側に書く (§4/§5) |

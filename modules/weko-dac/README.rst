@@ -57,6 +57,8 @@ WEKO3 モジュール。前提文書: RDC-AAP-00/04/05 (aifs リポジトリ doc
    $ export WEKO_DAC_TLS_CA_BUNDLE=/path/to/tls.crt         # DEMO-10 の自己署名証明書
    $ export WEKO_DAC_ALLOWLIST_PATH=/path/to/allowlist.json # DEMO-24 §3 (静的allowlist)
    # 形式は examples/allowlist.example.json を参照。未設定時は全許可 (verification に記録)
+   $ export WEKO_DAC_SCOPE_OWNER_SUB_ONLY=true   # デモ: 研究者本人(sub)は自分の申請を閲覧可
+   # 既定 false は §5.4 の委任ペア(sub + act.sub)厳密一致。デモは true 推奨
 
    # 4. デモ用 Offer の登録 (管理画面からも可)
    $ invenio dac demo-offer "https://doi.org/10.yyyy/data.456" \
@@ -93,7 +95,19 @@ renewal (§6.4) / appeal (§8.3)             未実装 (Phase 1 対象外とし�
 署名鍵の KMS/HSM 管理                      ファイル鍵 (0600)。本番は KMS へ
 監査ログサービス送信                        ローカル outbox + JSONL 追記 (DEMO-20 §4)
 Entity Configuration                       自己署名のみ (authority_hints / Trust Mark なし)
+申請閲覧スコープ (§5.4)                     WEKO_DAC_SCOPE_OWNER_SUB_ONLY=true で本人(sub)閲覧可に緩和
 ========================================  =============================================
+
+審査担当のロールと管理画面アクセス
+==================================
+
+審査コンソール(Admin → DAC)に入れる WEKO ロールは ``WEKO_DAC_OFFICER_ROLES``
+(既定: System Administrator / Repository Administrator / DAC Officer)。
+weko-admin は全 admin ビューの ``is_accessible`` を ``WEKO_ADMIN_ACCESS_TABLE``
+判定に上書きするため、拡張初期化時に各 officer ロールへ ``admin`` /
+``dac/applications`` / ``dac/offers`` を自動登録する (これが無いと System
+Administrator 以外は「Permission required」)。IdP(Keycloak) 経由の審査担当
+アカウント作成手順は ``docs/OPERATIONS_ja.md`` §4.1。
 
 主要 API (§5–6)
 ===============

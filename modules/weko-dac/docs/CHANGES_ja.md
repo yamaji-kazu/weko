@@ -2,7 +2,7 @@
 
 - 対象: WEKO フォーク (yamaji-kazu/weko) への追加開発一式
 - 仕様: aifs リポジトリ `docs/rdc-aap/` (RDC-AAP-00〜05) および `docs/demo/` (DEMO-10/11/20/21/24)
-- 最終更新: 2026-08-31
+- 最終更新: 2026-09-03
 
 開発は以下の順で行われた。各段の詳細は該当ドキュメント・コミットを参照。
 
@@ -77,6 +77,31 @@ URL 形式の識別子がパス形式では一致しない問題への対応。
 - Shibboleth (Keycloak SAML) ログイン: nginx 同梱 SP の設定
   (shibboleth2.xml / weko.conf / invenio.cfg)
 - weko-dac 接続設定 (環境変数) と cron (`invenio dac pump`)
+
+## 7. IdP SSO の実運用対応と審査権限・スコープ整備 (2026-09-03)
+
+officer1(WEKO の DAC 審査担当) を IdP 経由で運用し、hanako の申請を承認して
+Grant Wallet まで通す過程で判明した問題への対応。→ 詳細: `docs/OPERATIONS_ja.md` §4/§4.1/§5
+
+- **weko-accounts: confirm ループ修正**。`WEKO_ACCOUNTS_SSO_ATTRIBUTE_MAP` を最小化すると
+  `get_relation_info()` が `shib_role_authority_name` で KeyError → None を返し、連携済みでも
+  毎回 confirm 画面に戻る。マップに `shib_role_authority_name`/`shib_ip_range_flag` を補完
+- **weko-accounts: ロール保持ガード** (`WEKO_ACCOUNTS_SHIB_KEEP_LOCAL_ROLES`)。IdP が
+  affiliation を送らない構成で `check_in()` の `roles.clear()` が SSO ログインのたびに
+  手動付与ロールを消す問題を回避 (affiliation/mAP 連携がある場合は従来動作)
+- **weko-dac: 審査コンソールのアクセス権**。weko-admin が全 admin ビューの `is_accessible` を
+  `role_has_access`(=`WEKO_ADMIN_ACCESS_TABLE` 判定) に上書きするため、DAC 独自の `is_officer`
+  だけでは System Administrator 以外が 403。拡張初期化(`ext.py`)で `WEKO_DAC_OFFICER_ROLES` の
+  各ロールに `admin`/`dac/applications`/`dac/offers` を自動登録
+- **weko-dac: 状態確認スコープ** (`WEKO_DAC_SCOPE_OWNER_SUB_ONLY`)。`GET/list applications` の
+  §5.4 スコープを、デモでは「研究者本人(sub)は自分の申請を委任エージェントに依らず閲覧可」に
+  緩和 (既定 false は委任ペア sub+act.sub 厳密一致)。on-behalf-of の代理確認は subject=研究者の
+  委任トークンで行う旨を DG と共有
+- **Keycloak(IdP) 運用メモ**: Frontend URL を 141 に固定 (140 だと CSS 崩れ + Cookie 分裂で
+  `authentication_expired`)、新規利用者は Temporary=OFF / Required actions 空 / Email verified
+
+これにより「hanako 申請 → officer1 承認 → Agreement/Visa 発行 → Wallet deposit → DG callback
+(DG は写しを持たず Wallet 参照)」の一連が疎通 (DEMO-21 受入条件1: 申請〜deposit まで到達)。
 
 ## 既知の制約 / 本番移行時の課題
 

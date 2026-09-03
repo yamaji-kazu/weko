@@ -211,6 +211,10 @@ DEMO-10 (Keycloak) と DEMO-11 (Grant Wallet) の稼働後に実施する。
 - web/worker の環境変数 (`WEKO_DAC_OIDC_ISSUER` 等) が設定済みであること
   (README.rst「セットアップ」参照)
 - IdP の自己署名証明書を `WEKO_DAC_TLS_CA_BUNDLE` に設定済みであること
+- **IdP SSO ログインが疎通していること** (`OPERATIONS_ja.md` §4)。特に Keycloak の
+  Frontend URL=141、SSO 属性マップの補完、新規利用者は Temporary=OFF。
+  審査担当(officer1)は「DAC Officer」ロールで IdP 連携済みであること (§4.1)
+- デモでは `WEKO_DAC_SCOPE_OWNER_SUB_ONLY=True` (研究者本人 sub は自分の申請を閲覧可)
 
 ### 4.2 正常系 (分冊00 §5 の DAC 関連部分)
 
@@ -233,7 +237,7 @@ DEMO-10 (Keycloak) と DEMO-11 (Grant Wallet) の稼働後に実施する。
 | N1 | トークンなしで `POST /applications` | 401 missing_token |
 | N2 | scope に `rags:apply` がないトークン | 403 insufficient_scope |
 | N3 | 委任なし (act.sub/azp なし) のトークン | 403 delegation_required |
-| N4 | 他人の application_id の `GET` | 404 |
+| N4 | 別 sub (研究者本人でない) で他人の application_id を `GET` | 404 (`SCOPE_OWNER_SUB_ONLY=True` でも本人 sub 以外は不可) |
 | N5 | 同じ Presentation を2回 `access-token` に提示 | 2回目 409 presentation_replayed |
 | N6 | `exp` 超過 (発行5分後) の Presentation | 401 |
 | N7 | revoke 後の access-token | 403 visa_revoked_or_unknown |
@@ -269,7 +273,9 @@ for e in DacAuditOutbox.query.order_by(DacAuditOutbox.id).all():
 | トークン検証で invalid_token | issuer 不一致 (Keycloak の `KC_HOSTNAME` と `WEKO_DAC_OIDC_ISSUER` を一致させる)、または自己署名証明書 (`WEKO_DAC_TLS_CA_BUNDLE` を設定) |
 | Wallet 格納が失敗し wallet_deposited=False のまま | `WEKO_DAC_WALLET_API_BASE` / `WEKO_DAC_CLIENT_SECRET` を確認。復旧後は `invenio dac pump` (cron) が自動再送 |
 | callback が届かない | DG 側エンドポイント未稼働なら正常 (outbox に滞留し再送)。`dac_event_outbox.attempts` を確認 |
-| 管理画面に DAC メニューが出ない | ログインユーザに `WEKO_DAC_OFFICER_ROLES` のロール (System/Repository Administrator 等) がない |
+| 管理画面に DAC メニューが出ない | ログインユーザに `WEKO_DAC_OFFICER_ROLES` のロール (System/Repository Administrator/DAC Officer) がない |
+| DAC 画面/管理トップが「Permission required」(403) | `WEKO_ADMIN_ACCESS_TABLE` への DAC/`admin` 登録が未反映。ロール付与後に web 再起動。詳細 `OPERATIONS_ja.md` §4.1 |
+| 状態確認 `GET /applications/{id}` が 404 (存在するのに) | 提示トークンの `sub`/`agent` が申請時と不一致。本人は `WEKO_DAC_SCOPE_OWNER_SUB_ONLY=True` で閲覧可。代理確認は subject=研究者の委任トークンで (`OPERATIONS_ja.md` §5/§7) |
 
 ログ確認: `docker compose -f docker-compose2.yml logs --tail 50 web`
 
