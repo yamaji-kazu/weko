@@ -164,13 +164,31 @@ def create_application():
     }), 201
 
 
+def _caller_owns(application):
+    """Whether the caller may read/act on this application.
+
+    Spec (§5.4): the delegation pair — researcher ``sub`` AND delegated
+    agent (``act.sub``/``azp``) — must match what created the application.
+
+    Demo option ``WEKO_DAC_SCOPE_OWNER_SUB_ONLY`` relaxes this to "the
+    researcher (``sub``) may always read their own application", so the
+    researcher can check status through any of their agents/portals
+    (e.g. sub=researcher via dg-portal). The on-behalf-of agent still
+    needs ``sub``=researcher; a token whose ``sub`` is a different
+    identity is denied either way.
+    """
+    sub_ok = application.researcher_sub == g.dac_sub
+    if current_app.config.get('WEKO_DAC_SCOPE_OWNER_SUB_ONLY'):
+        return sub_ok
+    return sub_ok and application.agent_id == g.dac_agent
+
+
 def _own_application_or_none(app_id):
     application = DacApplication.query.filter_by(
         application_id=app_id).first()
     if application is None:
         return None
-    if application.agent_id != g.dac_agent or \
-            application.researcher_sub != g.dac_sub:
+    if not _caller_owns(application):
         return None
     return application
 
@@ -178,10 +196,15 @@ def _own_application_or_none(app_id):
 @blueprint_api.route('/applications', methods=['GET'])
 @require_rags_token(scope='rags:apply')
 def list_applications():
-    """List own applications (§5.4) — restricted to the caller's
-    delegation pair (sub, act.sub)."""
-    query = DacApplication.query.filter_by(
-        agent_id=g.dac_agent, researcher_sub=g.dac_sub)
+    """List own applications (§5.4).
+
+    Restricted to the caller's delegation pair (sub, act.sub); with
+    ``WEKO_DAC_SCOPE_OWNER_SUB_ONLY`` the researcher (sub) lists their
+    own applications regardless of which agent/portal presents the token.
+    """
+    query = DacApplication.query.filter_by(researcher_sub=g.dac_sub)
+    if not current_app.config.get('WEKO_DAC_SCOPE_OWNER_SUB_ONLY'):
+        query = query.filter_by(agent_id=g.dac_agent)
     status = request.args.get('status')
     if status:
         query = query.filter_by(status=status)

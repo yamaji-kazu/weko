@@ -123,6 +123,12 @@ WEKO_DAC_OFFICER_ROLES = [
     'System Administrator', 'Repository Administrator', 'DAC Officer',
 ]
 
+#: [DEMO] Relax application read/list scope (§5.4) so that the researcher
+#: (token ``sub``) may always see their own application, regardless of
+#: which delegated agent/portal presents the token. Default False keeps
+#: the strict delegation-pair (sub + act.sub) check required by the spec.
+WEKO_DAC_SCOPE_OWNER_SUB_ONLY = False
+
 #: Maximum negotiation round trips before forced human escalation
 #: (RDC-AAP-01 §5.5).
 WEKO_DAC_MAX_NEGOTIATION_ROUNDS = 5
