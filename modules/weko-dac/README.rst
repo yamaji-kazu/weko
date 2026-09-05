@@ -144,8 +144,10 @@ access-token の応答と callback (§6.3 / §5.7)
   URL 内の署名トークン (``exp = iat + WEKO_DAC_DOWNLOAD_URL_TTL``) が capability。
   取得側はこの URL を GET するだけ (委任トークンは不要)。ホストは ``WEKO_DAC_ENTITY_ID``
   なので、取得側がそのホストに到達できること。
-- Presentation の ``aud`` は ``WEKO_DAC_PRESENTATION_AUD`` (既定 = DAC_ID) を検証。
-  Wallet の ``present`` はこの値を ``aud`` に入れる (DG/Wallet と3者一致)。
+- Presentation の ``aud`` は ``WEKO_DAC_PRESENTATION_AUD`` (既定 = ``WEKO_DAC_ENTITY_ID``)
+  を検証 — 受信側(DAC)の Entity ID (RFC7519 §4.1.3 / GA4GH AAI)。Wallet の ``present`` は
+  この値を ``aud`` に入れる。どの DAC が発行したかは Visa ``ga4gh_visa_v1.source`` /
+  Agreement ``odrl:assigner`` が保持 (§6.1/§6.2)。
 - **callback** (``§5.7``, 状態遷移・agreement.issued 等) は DG の ``callback_url`` へ
   平文 JSON を POST。認証は Keycloak client_credentials の Bearer
   (``WEKO_DAC_TOKEN_URL`` / ``WEKO_DAC_CLIENT_ID`` / ``WEKO_DAC_CLIENT_SECRET``)。

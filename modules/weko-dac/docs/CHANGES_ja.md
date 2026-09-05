@@ -116,8 +116,10 @@ DEMO-20 台本の 4 (許諾→callback) 完成と、台本5 (取得) の前提�
 - **再送のバックオフは naive UTC 比較**。長時間失敗後は `next_attempt_at` が先へ延びるため、
   即時再送は `UPDATE … SET next_attempt_at=now(), attempts=0` → `invenio dac pump`
 - **access-token 応答に `file_name` を追加** (DG が GRDM 格納時のファイル名に使用)
-- **Presentation の `aud` を DAC_ID に整合** (`WEKO_DAC_PRESENTATION_AUD`、既定
-  `https://163.220.178.140/dacs/rdc-dac-001`)。DG/Wallet と3者で一致させる値
+- **Presentation の `aud` は受信側(DAC)の Entity ID** (`WEKO_DAC_PRESENTATION_AUD`、既定
+  `https://163.220.178.140`、案B確定)。RFC7519 §4.1.3 / GA4GH AAI に従い `aud` はリライング・
+  パーティ(受信者)を指す。DAC の同定は Visa `ga4gh_visa_v1.source` / Agreement `odrl:assigner`
+  が保持 (§6.1/§6.2)。3者で `aud` を一致させる (当初 DAC_ID 案から Entity ID 案へ確定)
 - **download_url は認証なしの期限付き URL**。`/api/dac/v1/download?token=<JWS>` は Bearer 不要で、
   URL 内の署名トークン (`exp = iat + WEKO_DAC_DOWNLOAD_URL_TTL`、デモ 900 秒) が capability。
   `checksum` は Offer に登録があれば sha256 で返す

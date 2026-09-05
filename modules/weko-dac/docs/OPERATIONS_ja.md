@@ -170,12 +170,12 @@ docker-compose2.yml の **web と worker 両方**の environment に設定:
 | WEKO_DAC_ALLOWLIST_PATH | `/code/<配布された allowlist.json>` | DEMO-24 §3。visa_issuer / agent:requester / wallet の検証 |
 | WEKO_DAC_PASSPORT_ENFORCE | (既定 true) | false で Passport 検証を記録のみに緩和 (単体試験用) |
 | WEKO_DAC_SCOPE_OWNER_SUB_ONLY | (既定 false / デモ true) | 申請の閲覧スコープ(§5.4)。true で「研究者本人(トークン sub)は自分の申請を、委任エージェントに依らず閲覧可」。false は仕様どおり委任ペア(sub + act.sub)厳密一致 |
-| WEKO_DAC_PRESENTATION_AUD | (既定 = DAC_ID) | Presentation の `aud` 検証値。DG/Wallet と揃える。デモは `https://163.220.178.140/dacs/rdc-dac-001` |
+| WEKO_DAC_PRESENTATION_AUD | (既定 = Entity ID) | Presentation の `aud` 検証値＝**受信側(DAC)の Entity ID** (RFC7519 §4.1.3 / GA4GH AAI)。デモは `https://163.220.178.140`。DAC の同定は Visa `ga4gh_visa_v1.source` / Agreement `odrl:assigner` が保持 |
 | WEKO_DAC_DOWNLOAD_URL_TTL | (既定 300 / デモ 900) | access-token が返す署名付き download_url の有効期限(秒) |
 
 これらは `WEKO_DAC_*` の Flask config で、`scripts/instance.cfg` テンプレート末尾に書く
 (環境変数でも可)。デモでは `WEKO_DAC_SCOPE_OWNER_SUB_ONLY = True` /
-`WEKO_DAC_DOWNLOAD_URL_TTL = 900` / `WEKO_DAC_PRESENTATION_AUD = "https://163.220.178.140/dacs/rdc-dac-001"` を設定している。
+`WEKO_DAC_DOWNLOAD_URL_TTL = 900` / `WEKO_DAC_PRESENTATION_AUD = "https://163.220.178.140"` を設定している。
 
 **callback の Bearer 認証は必須**。DG の callback 受口は認証必須 (無認証 POST は 401) のため、
 WEKO は `get_service_token()` で Keycloak の client_credentials トークンを取得して Bearer で送る。
