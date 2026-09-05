@@ -20,13 +20,15 @@ WEKO_DAC_ENTITY_ID = os.environ.get('WEKO_DAC_ENTITY_ID',
 WEKO_DAC_DAC_ID = os.environ.get(
     'WEKO_DAC_DAC_ID', WEKO_DAC_ENTITY_ID + '/dacs/rdc-dac-001')
 
-#: Expected ``aud`` of a Grant Presentation (§6.3). The presenter (Wallet,
-#: on behalf of the researcher/DG) must set this as the audience. Defaults
-#: to the DAC identifier so all three parties (DG / Wallet / 公開基盤) agree
-#: on the DAC's specific identity rather than the bare server URL. Override
-#: with WEKO_DAC_PRESENTATION_AUD if the 3-party alignment picks another value.
+#: Expected ``aud`` of a Grant Presentation (§6.3). Per RFC 7519 §4.1.3 and
+#: GA4GH AAI, ``aud`` identifies the RELYING PARTY that receives and verifies
+#: the presentation — i.e. this DAC service's Entity ID (WEKO_DAC_ENTITY_ID).
+#: Which DAC issued the grant is carried by the credential itself: the Visa
+#: ``ga4gh_visa_v1.source`` and the Agreement ``odrl:assigner`` hold the DAC id
+#: (§6.1/§6.2). Defaults to WEKO_DAC_ENTITY_ID; override only if a deployment
+#: fronts the DAC under a different receiver identifier.
 WEKO_DAC_PRESENTATION_AUD = os.environ.get(
-    'WEKO_DAC_PRESENTATION_AUD', WEKO_DAC_DAC_ID)
+    'WEKO_DAC_PRESENTATION_AUD', WEKO_DAC_ENTITY_ID)
 
 #: ODRL profile URI (spec vol.05).
 WEKO_DAC_ODRL_PROFILE = 'https://rdc.nii.ac.jp/ns/odrl-profile/v1'
