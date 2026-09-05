@@ -47,8 +47,10 @@ def pump():
 @click.option('--access-class', default='controlled')
 @click.option('--file', 'file_path', default=None,
               help='path/URL of the restricted data')
+@click.option('--checksum', 'checksum_opt', default=None,
+              help='sha256 hex; auto-computed from a local --file when omitted')
 @with_appcontext
-def demo_offer(dataset_id, duo, period, access_class, file_path):
+def demo_offer(dataset_id, duo, period, access_class, file_path, checksum_opt):
     """Register a demo ODRL Offer for DATASET_ID."""
     from .models import DacOffer
     from .services import offer_from_template
@@ -70,5 +72,20 @@ def demo_offer(dataset_id, duo, period, access_class, file_path):
     row.offer = offer
     row.template = template
     row.distribution_uri = file_path
+    # sha256 for the access-token response checksum (分冊01 §6.3)
+    checksum = checksum_opt
+    if not checksum and file_path \
+            and not file_path.startswith(('http://', 'https://')):
+        import hashlib
+        import os
+        if os.path.isfile(file_path):
+            h = hashlib.sha256()
+            with open(file_path, 'rb') as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b''):
+                    h.update(chunk)
+            checksum = h.hexdigest()
+    if checksum:
+        row.checksum = checksum
     db.session.commit()
-    click.secho('Offer registered for %s' % dataset_id, fg='green')
+    click.secho('Offer registered for %s%s' % (
+        dataset_id, ' (checksum set)' if checksum else ''), fg='green')
