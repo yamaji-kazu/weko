@@ -560,6 +560,9 @@ def deliver_event(outbox_row):
         if 200 <= resp.status_code < 300:
             outbox_row.delivered_at = datetime.utcnow()
             return True
+        current_app.logger.warning(
+            'weko-dac: callback %s returned %s: %s',
+            outbox_row.callback_url, resp.status_code, resp.text[:300])
     except Exception:
         current_app.logger.exception('weko-dac: callback delivery failed')
     schedule = current_app.config.get(
@@ -569,6 +572,33 @@ def deliver_event(outbox_row):
     outbox_row.next_attempt_at = datetime.utcnow() + \
         timedelta(seconds=delay)
     return False
+
+
+def flush_pending_events(application_id=None):
+    """Best-effort immediate callback delivery (§5.7).
+
+    Attempts to deliver due, undelivered events right after they are
+    enqueued+committed, so DG sees state changes in seconds rather than
+    waiting for the periodic ``invenio dac pump`` sweep. The sweep remains
+    the fallback (retries with backoff). Never raises into the caller.
+    """
+    try:
+        now = datetime.utcnow()
+        q = DacEventOutbox.query.filter(
+            DacEventOutbox.delivered_at.is_(None),
+            DacEventOutbox.next_attempt_at <= now)
+        if application_id:
+            q = q.filter(DacEventOutbox.application_id == application_id)
+        rows = q.order_by(DacEventOutbox.id).limit(50).all()
+        for row in rows:
+            if row.attempts > 30:
+                continue
+            deliver_event(row)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            'weko-dac: immediate event flush failed (periodic pump will retry)')
 
 
 # --------------------------------------------------------------------------
@@ -642,6 +672,7 @@ def execute_decision(application, decision, reason, officer_id,
     else:
         raise ValueError('Unknown decision %s' % decision)
     db.session.commit()
+    flush_pending_events(application.application_id)
     return row
 
 
