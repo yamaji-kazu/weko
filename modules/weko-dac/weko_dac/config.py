@@ -39,6 +39,12 @@ WEKO_DAC_REGISTERED_TERMS_URI = os.environ.get(
 #: ODRL profile URI (spec vol.05).
 WEKO_DAC_ODRL_PROFILE = 'https://rdc.nii.ac.jp/ns/odrl-profile/v1'
 
+#: RFC 9457 Problem Details ``type`` URI の基底 (RDC-AAP-01 §5.8.2)。
+#: type = ``<基底>/<コードのアンダースコアをハイフンに置換>`` で自動生成する。
+#: 例: requirements_not_met → https://rdc.nii.ac.jp/ns/problems/requirements-not-met
+WEKO_DAC_PROBLEM_TYPE_BASE = os.environ.get(
+    'WEKO_DAC_PROBLEM_TYPE_BASE', 'https://rdc.nii.ac.jp/ns/problems')
+
 #: Estimated review period returned on application intake (ISO 8601).
 WEKO_DAC_ESTIMATED_REVIEW = 'P14D'
 

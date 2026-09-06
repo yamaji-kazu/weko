@@ -17,7 +17,8 @@ from flask import current_app, jsonify
 from invenio_db import db
 
 from . import allowlist, audit, services
-from .auth import verify_jws, verify_jws_with_keys
+from .auth import (problem_title, problem_type, verify_jws,
+                   verify_jws_with_keys)
 from .models import DacApplication, DacOffer
 
 
@@ -40,8 +41,12 @@ class RegError(Exception):
         super().__init__(detail)
 
     def as_response(self):
-        body = {'type': 'about:blank', 'title': self.code,
-                'status': self.status, 'detail': self.detail}
+        # type/title は code から自動生成 (RDC-AAP-01 §5.8.2)。title に
+        # 生のエラーコードは入れない。
+        body = {'type': problem_type(self.code),
+                'title': problem_title(self.code),
+                'status': self.status, 'detail': self.detail,
+                'code': self.code}
         if self.unmet is not None:
             body['unmet_requirements'] = self.unmet
         resp = jsonify(body)

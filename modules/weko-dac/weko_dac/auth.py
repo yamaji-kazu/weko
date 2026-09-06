@@ -27,22 +27,112 @@ from flask import current_app, g, jsonify, request
 
 _JWKS_CACHE = {'url': None, 'keys': None, 'fetched_at': 0}
 
+# Default base for RFC 9457 ``type`` URIs. Overridable via
+# WEKO_DAC_PROBLEM_TYPE_BASE (see config.py). Per RDC-AAP-01 §5.8.2 the
+# ``type`` is auto-generated as ``<base>/<code with _ replaced by ->``.
+_PROBLEM_TYPE_BASE_DEFAULT = 'https://rdc.nii.ac.jp/ns/problems'
+
+# Human-readable ``title`` for each machine code. The raw code is NEVER
+# used as the title (RDC-AAP-01 §5.8.2). A code missing here falls back to
+# its spaced form (``code.replace('_', ' ')``) — still not the raw code.
+PROBLEM_TITLES = {
+    # auth.py
+    'unsupported_key': '未対応の鍵形式です',
+    'invalid_token': 'トークンが不正です',
+    'token_expired': 'トークンの有効期限が切れています',
+    'missing_token': '認証トークンがありません',
+    'server_misconfigured': 'サーバ設定が不備です',
+    'insufficient_scope': 'スコープが不足しています',
+    'delegation_required': '委任（エージェント）が必要です',
+    # views.py — _problem
+    'key_unavailable': '署名鍵が利用できません',
+    'unknown_dataset': 'データセットが見つかりません',
+    'missing_dataset_id': 'dataset_id が指定されていません',
+    'unknown_visa': 'Visa が見つかりません',
+    'invalid_application': '申請内容が不正です',
+    'invalid_odrl': 'ODRL 記述が不正です',
+    'unknown_application': '申請が見つかりません',
+    'no_agreement': '合意（Agreement）が未発行です',
+    'invalid_message': 'メッセージが不正です',
+    'negotiation_limit': '交渉回数の上限に達しました',
+    'illegal_state': '現在の状態では実行できません',
+    'presentation_required': 'Grant Presentation が必要です',
+    'no_distribution': '配信物が見つかりません',
+    'not_open': '公開（open）区分ではありません',
+    'delivery_failed': '配信に失敗しました',
+    'invalid_download_token': 'ダウンロードトークンが不正です',
+    # views.py — AuthError (access-token / presentation)
+    'invalid_presentation': '提示（Presentation）が不正です',
+    'unsupported_presentation_type': '未対応の提示形式です',
+    'wallet_not_configured': 'ウォレットが設定されていません',
+    'unknown_wallet': '未知のウォレットです',
+    'presentation_expired': '提示の有効期限が切れています',
+    'presentation_replayed': '提示が再利用されました',
+    'agent_not_allowlisted': 'エージェントが許可リストにありません',
+    'visa_expired': 'Visa の有効期限が切れています',
+    'invalid_visa': 'Visa が不正です',
+    'visa_revoked_or_unknown': 'Visa が失効または不明です',
+    'visa_dataset_mismatch': 'Visa の対象データセットが一致しません',
+    'subject_mismatch': 'subject が一致しません',
+    'agent_mismatch': 'エージェントが一致しません',
+    # registered.py — RegError
+    'allowlist_misconfigured': '許可リスト設定が不備です',
+    'visa_issuer_unconfigured': 'Visa 発行者が未設定です',
+    'invalid_passport': 'パスポート／Visa を検証できません',
+    'requires_review': '審査（controlled）が必要です',
+    'not_registered': '登録（registered）区分ではありません',
+    'requirements_not_met': '資格要件が未充足です',
+}
+
+
+def problem_type(code):
+    """RFC 9457 ``type`` URI for a machine code (RDC-AAP-01 §5.8.2).
+
+    ``<base>/<code with underscores replaced by hyphens>``. The base is
+    ``WEKO_DAC_PROBLEM_TYPE_BASE`` (falls back to the RDC namespace).
+    """
+    try:
+        base = current_app.config.get(
+            'WEKO_DAC_PROBLEM_TYPE_BASE', _PROBLEM_TYPE_BASE_DEFAULT)
+    except RuntimeError:  # outside application context
+        base = _PROBLEM_TYPE_BASE_DEFAULT
+    base = (base or _PROBLEM_TYPE_BASE_DEFAULT).rstrip('/')
+    return '{0}/{1}'.format(base, (code or 'about-blank').replace('_', '-'))
+
+
+def problem_title(code):
+    """Human-readable ``title`` for a machine code — never the raw code."""
+    if not code:
+        return 'エラー'
+    return PROBLEM_TITLES.get(code, code.replace('_', ' '))
+
 
 class AuthError(Exception):
-    """Authentication / authorization failure (RFC 7807 style)."""
+    """Authentication / authorization failure (RFC 9457 Problem Details).
 
-    def __init__(self, status, title, detail=''):
-        super(AuthError, self).__init__(detail or title)
+    ``code`` is the stable machine-readable error code (snake_case). The
+    response ``type`` is auto-generated from it and ``title`` is its
+    human-readable label; the raw code is never surfaced as the title.
+    """
+
+    def __init__(self, status, code, detail=''):
+        super(AuthError, self).__init__(detail or code)
         self.status = status
-        self.title = title
+        self.code = code
+        # Back-compat alias: some callers still read ``.title``.
+        self.title = code
         self.detail = detail
 
     def as_response(self):
-        """Problem Details response."""
+        """Problem Details response (application/problem+json)."""
         resp = jsonify({
-            'type': 'about:blank', 'title': self.title,
-            'status': self.status, 'detail': self.detail})
+            'type': problem_type(self.code),
+            'title': problem_title(self.code),
+            'status': self.status,
+            'detail': self.detail,
+            'code': self.code})
         resp.status_code = self.status
+        resp.headers['Content-Type'] = 'application/problem+json'
         return resp
 
 

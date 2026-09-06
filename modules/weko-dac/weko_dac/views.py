@@ -12,8 +12,8 @@ from flask import (Blueprint, Response, current_app, g, jsonify, redirect,
 from invenio_db import db
 
 from . import allowlist, audit, registered, services, signing
-from .auth import (AuthError, jwk_to_public_key, require_rags_token,
-                   verify_jws)
+from .auth import (AuthError, jwk_to_public_key, problem_title, problem_type,
+                   require_rags_token, verify_jws)
 from .models import (DacAgreement, DacApplication, DacMessage, DacOffer,
                      DacPresentationJti, DacVisa)
 
@@ -22,10 +22,17 @@ blueprint_wellknown = Blueprint('weko_dac_wellknown', __name__, template_folder=
 blueprint_api = Blueprint('weko_dac_api', __name__, url_prefix='/dac/v1')
 
 
-def _problem(status, title, detail=''):
-    resp = jsonify({'type': 'about:blank', 'title': title,
-                    'status': status, 'detail': detail})
+def _problem(status, code, detail=''):
+    """RFC 9457 Problem Details response.
+
+    The second argument is the stable machine ``code`` (snake_case); the
+    ``type`` URI and human-readable ``title`` are auto-generated from it
+    (RDC-AAP-01 §5.8.2). The raw code is never used as the title.
+    """
+    resp = jsonify({'type': problem_type(code), 'title': problem_title(code),
+                    'status': status, 'detail': detail, 'code': code})
     resp.status_code = status
+    resp.headers['Content-Type'] = 'application/problem+json'
     return resp
 
 
