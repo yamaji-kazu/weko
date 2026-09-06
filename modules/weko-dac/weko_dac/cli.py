@@ -49,8 +49,11 @@ def pump():
               help='path/URL of the restricted data')
 @click.option('--checksum', 'checksum_opt', default=None,
               help='sha256 hex; auto-computed from a local --file when omitted')
+@click.option('--terms', 'terms_opt', default=None,
+              help='registered: accepted-terms URI (default WEKO_DAC_REGISTERED_TERMS_URI)')
 @with_appcontext
-def demo_offer(dataset_id, duo, period, access_class, file_path, checksum_opt):
+def demo_offer(dataset_id, duo, period, access_class, file_path, checksum_opt,
+               terms_opt):
     """Register a demo ODRL Offer for DATASET_ID."""
     from .models import DacOffer
     from .services import offer_from_template
@@ -63,6 +66,21 @@ def demo_offer(dataset_id, duo, period, access_class, file_path, checksum_opt):
         'duties': ['rdc:cite', 'rdc:reportCompletion', 'rdc:deleteData'],
         'prohibitions': ['distribute', 'rdc:reIdentify'],
     }
+    # アクセス区分ごとの Offer 内容 (分冊05 §12)
+    if access_class == 'open':
+        template['duties'] = ['rdc:cite']
+        template['prohibitions'] = []
+    elif access_class == 'registered':
+        terms = terms_opt or current_app.config['WEKO_DAC_REGISTERED_TERMS_URI']
+        # 資格要件 (§12.2): researcherStatus + acceptedTerms を必須にする
+        template['credentials'] = [
+            {'leftOperand': 'rdc:researcherStatus', 'operator': 'eq',
+             'rightOperand': True},
+            {'leftOperand': 'rdc:acceptedTerms', 'operator': 'eq',
+             'rightOperand': {'@id': terms}},
+        ]
+        template['duties'] = ['rdc:cite', 'rdc:noReIdentify']
+        template['prohibitions'] = ['rdc:reIdentify', 'distribute']
     offer = offer_from_template(dataset_id, template)
     row = DacOffer.query.filter_by(dataset_id=dataset_id).first()
     if row is None:

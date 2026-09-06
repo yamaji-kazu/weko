@@ -30,6 +30,12 @@ WEKO_DAC_DAC_ID = os.environ.get(
 WEKO_DAC_PRESENTATION_AUD = os.environ.get(
     'WEKO_DAC_PRESENTATION_AUD', WEKO_DAC_ENTITY_ID)
 
+#: [registered 層] 既定の規約 URI。demo-offer が registered Offer の
+#: rdc:acceptedTerms 要件に用いる (分冊05 §12.2 / 04_trust §5-2)。
+WEKO_DAC_REGISTERED_TERMS_URI = os.environ.get(
+    'WEKO_DAC_REGISTERED_TERMS_URI',
+    'https://rdc.nii.ac.jp/terms/registered-access/v1')
+
 #: ODRL profile URI (spec vol.05).
 WEKO_DAC_ODRL_PROFILE = 'https://rdc.nii.ac.jp/ns/odrl-profile/v1'
 

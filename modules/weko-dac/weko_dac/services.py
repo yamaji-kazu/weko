@@ -73,6 +73,10 @@ def offer_from_template(dataset_id, template):
         constraints.append({
             'leftOperand': 'rdc:ethicsApproval', 'operator': 'eq',
             'rightOperand': True})
+    for cred in template.get('credentials') or []:
+        # registered 層の資格要件 (分冊05 §12.2): leftOperand は
+        # rdc:researcherStatus / rdc:affiliation / rdc:acceptedTerms
+        constraints.append(cred)
     duties = [{'action': d} for d in (template.get('duties') or [])]
     prohibitions = [{'action': p}
                     for p in (template.get('prohibitions') or [])]

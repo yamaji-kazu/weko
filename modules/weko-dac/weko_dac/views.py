@@ -11,7 +11,7 @@ from flask import (Blueprint, Response, current_app, g, jsonify, redirect,
                    request, send_file)
 from invenio_db import db
 
-from . import allowlist, audit, services, signing
+from . import allowlist, audit, registered, services, signing
 from .auth import (AuthError, jwk_to_public_key, require_rags_token,
                    verify_jws)
 from .models import (DacAgreement, DacApplication, DacMessage, DacOffer,
@@ -544,6 +544,76 @@ def _distribution_file_name(offer_row):
     """Best-effort file name from the Offer's distribution URI (path or URL)."""
     uri = (offer_row.distribution_uri or '').split('?')[0].rstrip('/')
     return uri.rsplit('/', 1)[-1] if uri else None
+
+
+@blueprint_api.route('/registered-access', methods=['POST'])
+@require_rags_token(scope='rags:apply')
+def registered_access():
+    """registered 層の自動許諾 (§11.2)。Passport の資格 Visa を決定的に検証し、
+    Offer 要件を満たせばその場で Agreement + Visa を発行して Wallet に格納する。"""
+    body = request.get_json(silent=True) or {}
+    raw = body.get('dataset_id') or ''
+    if not raw:
+        return _problem(400, 'missing_dataset_id',
+                        'dataset_id required in the JSON body')
+    _offer, dataset_id = _find_offer(raw)
+    try:
+        _app, issued = registered.grant_registered(
+            dataset_id, body.get('passport') or '', body.get('purpose') or {},
+            g.dac_sub, g.dac_agent, callback_url=body.get('callback_url'))
+    except registered.RegError as err:
+        db.session.rollback()
+        return err.as_response()
+    agreement, visa = issued[0]
+    resp = jsonify({
+        'granted': True,
+        'agreement_uid': agreement.uid,
+        'wallet_credential_id': visa.wallet_credential_id,
+        'valid_until': visa.expires_at.strftime('%Y-%m-%d'),
+    })
+    resp.status_code = 201
+    return resp
+
+
+def _open_impl(raw):
+    offer_row, dataset_id = _find_offer(raw)
+    if offer_row is None:
+        return _problem(404, 'unknown_dataset',
+                        'No policy registered for %s' % dataset_id)
+    if offer_row.access_class != 'open':
+        return _problem(403, 'not_open',
+                        'accessClass is "%s"; open-data serves open datasets '
+                        'only' % offer_row.access_class)
+    if not offer_row.distribution_uri:
+        return _problem(404, 'no_distribution',
+                        'No data registered for this dataset')
+    audit.record('data.accessed',
+                 subject={'dataset_id': dataset_id},
+                 actor={'kind': 'public', 'id': 'anonymous'},
+                 payload={'access_route': 'open', 'presentation_absent': True})
+    db.session.commit()
+    uri = offer_row.distribution_uri
+    if uri.startswith('http://') or uri.startswith('https://'):
+        return redirect(uri)
+    try:
+        resp = send_file(uri, as_attachment=True)
+        if offer_row.checksum:
+            resp.headers['X-Checksum-Sha256'] = offer_row.checksum
+        return resp
+    except Exception as ex:
+        return _problem(500, 'delivery_failed', str(ex))
+
+
+@blueprint_api.route('/datasets/<path:dataset_id>/open-data', methods=['GET'])
+def open_data(dataset_id):
+    """open 層の直接取得 (§11.1、認証なし)。checksum は X-Checksum-Sha256 で返す。"""
+    return _open_impl(dataset_id)
+
+
+@blueprint_api.route('/open-data', methods=['GET'])
+def open_data_query():
+    """クエリ形式: ``GET /open-data?dataset_id=<url-encoded>`` (URL型ID向け)。"""
+    return _open_impl(request.args.get('dataset_id', ''))
 
 
 @blueprint_api.route('/download', methods=['GET'])
