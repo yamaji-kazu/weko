@@ -129,6 +129,26 @@ DEMO-20 台本の 4 (許諾→callback) 完成と、台本5 (取得) の前提�
   `wallet_deposited=t`・`wallet_credential_id` が入り、DG は agreement_uid か credential_id で拾える。
   未設定だと deposit されず callback の該当フィールドが null のままになる (台本4→5 の詰まり要因)
 
+## 9. 台本5 完了対応 (2026-09-05〜06)
+
+DEMO-90 §4 の残ブロッカを消し込み、台本5 (取得) を通した際の変更。
+
+- **callback 即時配送** (`services.flush_pending_events`): 承認コミット直後にその場配送し、
+  失敗時のみ周期スイープにフォールバック。従来は 5 分周期 cron 任せで最大約5分遅延していたが、
+  実測 **0.1〜0.2 秒**に短縮 (台本4 の「承認→その場で DG 画面が変わる」が成立)。
+  あわせて deliver の非2xx を warning ログに出力
+- **Offer の checksum 自動登録** (`demo-offer`): ローカル `--file` の sha256 を計算して
+  `dac_offer.checksum` に登録 (`--checksum <hex>` で明示指定も可)。access-token 応答が
+  `checksum:{algorithm:sha256,value}` を返すようになり、DG は取得後に照合してから GRDM へ格納
+- **aud 確定 (案B)**: §8 の DAC_ID 案から **受信側 Entity ID** (`https://163.220.178.140`) へ
+  確定 (RFC7519 §4.1.3 / GA4GH AAI)。DAC 同定は Visa `ga4gh_visa_v1.source` /
+  Agreement `odrl:assigner` が保持
+
+台本5 の通しで確認された公開基盤側の証跡: 承認 callback が秒単位配送、access-token が
+checksum (`5fcf…`) を返し DG のダウンロード実体と一致、`data.accessed` が Agreement `uid`
+紐づけ・`presentation_absent:false` で記録、旧 `aud`/リプレイ/`presented_by` 不在の
+異常系はいずれも拒否 (401/403/409)。
+
 ## 既知の制約 / 本番移行時の課題
 
 README.rst「デモ簡略化」表のとおり。特に: Trust Chain/Trust Mark/DPoP は

@@ -204,11 +204,18 @@ API 全 404 障害の再発防止)。
 
 ## 6. 定常運用
 
+- **callback 即時配送**: 承認 (officer 決裁) のコミット直後に `flush_pending_events` で
+  その場配送するため、DG へは**秒単位**で届く (実測 0.1〜0.2 秒)。下記 cron は
+  **取りこぼしの保険 (バックオフ再送)** の位置づけで、周期に依存しない
 - **cron**: `*/5 * * * * cd /home/mdxuser/dev/weko && docker compose -f docker-compose2.yml exec -T web invenio dac pump >> /tmp/dac_pump.log 2>&1`
-  (callback 再送・Wallet deposit リトライ・期限失効)
-- **監査ログ**: DB (`dac_audit_outbox`) + JSONL (`<instance>/data/dac_audit.jsonl`)
+  (即時配送に失敗したイベントの再送・Wallet deposit リトライ・期限失効)
+- **監査ログ**: DB (`dac_audit_outbox`) + JSONL (`<instance>/data/dac_audit.jsonl`)。
+  download は access-token 発行時に `data.accessed` を Agreement `uid` 紐づけで記録
 - **デモ用 Offer**: WebUI でアイテム登録 (制限公開) → `invenio dac demo-offer "<records URL>" --file <実体>`
-  (手順: `DEMO01_curl_ja.md` §1)
+  (手順: `DEMO01_curl_ja.md` §1)。**`--file` がローカルファイルなら sha256 を自動計算して
+  `checksum` に登録**し、access-token 応答が `checksum:{algorithm,value}` を返す
+  (URL 配信や明示登録は `--checksum <hex>`)。既存 Offer に後から入れるなら
+  `UPDATE dac_offer SET checksum='<sha256>' WHERE dataset_id='<URL>'`
 - **デフォルトアカウント**: `wekosoftware@nii.ac.jp` ほか、共通パスワード
   `uspass123`。**公開サーバのため変更済みであること**を確認
 
@@ -230,6 +237,7 @@ API 全 404 障害の再発防止)。
 | 状態確認 `GET /applications/{id}` が 404 (存在するのに) | 所有者スコープ不一致。トークンの `sub`/`agent` が申請時と違う → デバッグは `_own_application_or_none` にログ、緩和は `WEKO_DAC_SCOPE_OWNER_SUB_ONLY` (§5)。エージェント代理は subject=研究者の委任トークンで |
 | callback の `delivered_at` が空のまま | (1) `WEKO_DAC_TOKEN_URL`/`CLIENT_SECRET` 未設定で無認証送信→DG が 401 (§5)。(2) DG の証明書が CA バンドル未登録で TLS 失敗。(3) 宛先(内部IP)へ到達不可。`docker compose exec web invenio dac pump` 後にログの `service token failed`/`callback delivery failed` を確認 |
 | callback が今すぐ再送されない | バックオフ待ち。`dac_event_outbox.next_attempt_at` が未来 (naive UTC 比較)。即時再送は `UPDATE dac_event_outbox SET next_attempt_at=now(), attempts=0 WHERE delivered_at IS NULL` → `invenio dac pump` |
+| access-token の `checksum` が null | Offer に checksum 未登録。`demo-offer` を `--file <ローカル>` で再実行 (自動 sha256) するか、`UPDATE dac_offer SET checksum='<sha256>' WHERE dataset_id='<URL>'` |
 | Wallet deposit 失敗のまま | dac pump が自動再送。SECRET/URL/CA バンドル確認。`WEKO_DAC_WALLET_API_BASE` 未設定だと deposit されず Visa はアプリのリソース経由のみ |
 | /api/dac/v1 が全パス 404 (Werkzeug 定型文) | weko-dac 未インストール状態で起動 (コンテナ再作成後など)。entrypoint の自動インストール導入後は発生しないはずだが、発生時は `pip show weko-dac` を確認し `pip install -e` → restart |
 | 再起動後に invenio.cfg の設定が消える | entrypoint が `scripts/instance.cfg` から再生成するため。恒久設定はテンプレート側に書く (§4/§5) |
