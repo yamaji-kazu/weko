@@ -2,6 +2,7 @@
 """CLI commands: ``invenio dac ...``."""
 
 import click
+from flask import current_app
 from flask.cli import with_appcontext
 from invenio_db import db
 
