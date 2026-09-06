@@ -126,6 +126,9 @@ Administrator 以外は「Permission required」)。IdP(Keycloak) 経由の審�
    POST /api/dac/v1/applications/{id}/withdraw        取下げ
    POST /api/dac/v1/datasets/{id}/access-token        Presentation → 署名付きURL (scope rags:retrieve)
    POST /api/dac/v1/access-token                      同上 (dataset_id をボディで渡す形式。URL型IDに推奨)
+   POST /api/dac/v1/registered-access                 registered: 資格Visaで自動許諾→即時発行 (scope rags:apply, §11.2)
+   GET  /api/dac/v1/open-access?dataset_id=...         open: access-token同形JSON(download_url+checksum、無認証、§11.1)
+   GET  /api/dac/v1/open-data?dataset_id=...           open: 実体を直接配信(無認証・MCP向け。checksumは X-Checksum-Sha256)
    GET  /.well-known/openid-federation                Entity Configuration (自己署名)
 
 dataset_id は URL エンコードして渡す (例: ``https%3A%2F%2Fdoi.org%2F10.yyyy%2Fdata.456``)。

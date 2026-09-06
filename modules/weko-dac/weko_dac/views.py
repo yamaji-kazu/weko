@@ -616,6 +616,54 @@ def open_data_query():
     return _open_impl(request.args.get('dataset_id', ''))
 
 
+def _open_access_impl(raw):
+    """open 層の取得情報 (§11.1、認証なし)。``access-token`` と**同一形式**の JSON を
+    返す — ``download_url`` (controlled と同じ署名付き ``/download`` を指す) +
+    ``file_name`` + ``checksum {algorithm, value}``。DG は区分に依らず同じ場所・
+    同じ形で checksum を読める (DG 照会 O-1/O-3)。認証・提示は不要、access-token と
+    ``/download`` の検証経路には触れない。"""
+    offer_row, dataset_id = _find_offer(raw)
+    if offer_row is None:
+        return _problem(404, 'unknown_dataset',
+                        'No policy registered for %s' % dataset_id)
+    if offer_row.access_class != 'open':
+        return _problem(403, 'not_open',
+                        'accessClass is "%s"; open-access serves open '
+                        'datasets only' % offer_row.access_class)
+    if not offer_row.distribution_uri:
+        return _problem(404, 'no_distribution',
+                        'No data registered for this dataset')
+    # 許諾なし: subject=anonymous, agreement=None の署名付きダウンロードトークン
+    token = signing.sign_download_token(dataset_id, 'anonymous', None)
+    # §11.1 監査: data.accessed を記録 (提示履歴=Wallet には残さない O-4)
+    audit.record('data.accessed',
+                 subject={'dataset_id': dataset_id},
+                 actor={'kind': 'public', 'id': 'anonymous'},
+                 payload={'access_route': 'open', 'presentation_absent': True})
+    db.session.commit()
+    return jsonify({
+        'download_url': '{0}/api/dac/v1/download?token={1}'.format(
+            current_app.config['WEKO_DAC_ENTITY_ID'], token),
+        'file_name': _distribution_file_name(offer_row),
+        'expires_in': current_app.config['WEKO_DAC_DOWNLOAD_URL_TTL'],
+        'checksum': ({'algorithm': 'sha256', 'value': offer_row.checksum}
+                     if offer_row.checksum else None),
+    })
+
+
+@blueprint_api.route('/datasets/<path:dataset_id>/open-access',
+                     methods=['GET'])
+def open_access(dataset_id):
+    """open 層の取得情報 (§11.1、認証なし)。access-token と同形の JSON を返す。"""
+    return _open_access_impl(dataset_id)
+
+
+@blueprint_api.route('/open-access', methods=['GET'])
+def open_access_query():
+    """クエリ形式: ``GET /open-access?dataset_id=<url-encoded>`` (URL型ID向け)。"""
+    return _open_access_impl(request.args.get('dataset_id', ''))
+
+
 @blueprint_api.route('/download', methods=['GET'])
 def download():
     """Serve restricted data against a signed download token."""
