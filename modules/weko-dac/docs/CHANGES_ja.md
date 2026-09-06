@@ -149,6 +149,41 @@ checksum (`5fcf…`) を返し DG のダウンロード実体と一致、`data.a
 紐づけ・`presentation_absent:false` で記録、旧 `aud`/リプレイ/`presented_by` 不在の
 異常系はいずれも拒否 (401/403/409)。
 
+## 10. 第2段階 — アクセス区分 open / registered (2026-09-06, RDC-AAP-01 §11)
+
+「同じ研究計画から 3 件のデータが 3 通りの経路で来る」を実装。同一コホートの 3 層
+(controlled=個票 `records/2000001`、registered=コードブック `records/2000002`、
+open=集計サマリ `records/2000003`) を、待ち時間 **数日 / 数秒 / ゼロ** で見せる。
+
+- **`registered` 自動許諾** (`weko_dac/registered.py`, `POST /registered-access`, scope
+  `rags:apply`): Passport の資格 Visa (`ResearcherStatus` / `AcceptedTermsAndPolicies`) を
+  **決定的ルール評価のみ**で検証 (§11.2.1 認証・§12.2 認可)。`ga4gh_passport_v1` (内側 Visa 束)
+  と単体 `ga4gh_visa_v1` の両形式に対応。充足なら controlled の承認分岐 (§6) を再利用して
+  Agreement + Visa を即時発行→Wallet 預け入れ→callback。LLM も `needs_human` も通さない
+  (§11.2.2-4)。不充足は `403 requirements_not_met` に `unmet_requirements` を添えて返す。
+  判定表 `_REQ_TO_VISA` は leftOperand→Visa type (分冊05 §12.2)。`researcherStatus` は
+  **有無判定** (rightOperand True)、`acceptedTerms` は **rightOperand `@id` と Visa `value` の
+  文字列一致** (到達性は見ない)。
+- **`open` 直接取得** (認証なし, §11.1): `GET /open-access` は **access-token と同形の JSON**
+  (`download_url`(署名付き `/download`) + `file_name` + `checksum{algorithm,value}`) を返す
+  (DG 照会 O-1/O-3。区分に依らず checksum を同じ場所・同じ形で読める)。`GET /open-data` は
+  実体を直接配信 (MCP 向け、checksum は `X-Checksum-Sha256`)。`access-token`/`/download` の
+  検証経路 (リプレイ/aud/presented_by) には一切触れない。`data.accessed` は
+  `access_route:open`・`presentation_absent:true` で記録、Wallet 提示履歴には残さない (O-4)。
+- **Offer テンプレート** (`services.offer_from_template` + `demo-offer`): `--access-class
+  open|registered` を追加。registered は資格 constraint (researcherStatus/acceptedTerms) と
+  `WEKO_DAC_REGISTERED_TERMS_URI` (既定 `https://rdc.nii.ac.jp/terms/registered-access/v1`)、
+  open は義務=引用のみ。`--terms` で規約 URI を上書き可。
+- **修正**: `cli.py` に `from flask import current_app` を追加 (`demo-offer --access-class
+  registered` が `current_app` 未 import で `NameError` になっていた)。
+
+通しで確認した証跡: open は `open-access`→`download_url`→実体で sha 一致
+(`a01f194b…`、認証なし)。registered は委任トークン (dg-portal password grant→dar-agent
+token-exchange、`sub=hanako`/`act.sub=dar-001`/`scope rags:apply`) → passport 決定的検証
+(`unmet []`) → `201 granted` → Agreement (`agr-app-2026-3cfdbc90`) → Visa → Wallet 預け入れ
+(`wc-…`) → hanako の「マイ許諾」掲載。open は許諾を持たないので提示履歴に出ず、台本5 の
+「監査ログ3件・提示履歴2件」の対比が成立。
+
 ## 既知の制約 / 本番移行時の課題
 
 README.rst「デモ簡略化」表のとおり。特に: Trust Chain/Trust Mark/DPoP は

@@ -34,6 +34,20 @@ WEKO3 モジュール。前提文書: RDC-AAP-00/04/05 (aifs リポジトリ doc
    Passport 形式) を allowlist の ``visa_issuer`` エントリの inline jwks で
    検証 (署名 / exp / iss=visa_issuer entity_id / sub=申請トークン sub)。
    不合格は 400 invalid_passport で申請拒否。
+9. **アクセス区分 open / registered (§11)**: ``rdc:accessClass`` により経路を分岐。
+
+   - ``registered`` (§11.2): ``POST …/registered-access`` (scope ``rags:apply``)。
+     Passport の資格 Visa (``ResearcherStatus`` / ``AcceptedTermsAndPolicies``) を
+     **決定的ルール評価のみ**で検証し (``weko_dac/registered.py``、``ga4gh_passport_v1``
+     の束と単体 Visa の両対応)、充足なら §6 の許諾発行を再利用して Agreement + Visa を
+     即時発行→Wallet→callback。不充足は ``403 requirements_not_met`` +
+     ``unmet_requirements``。LLM も ``needs_human`` も使わない。
+   - ``open`` (§11.1、認証なし): ``GET …/open-access`` は access-token と**同形の JSON**
+     (``download_url`` + ``file_name`` + ``checksum{algorithm,value}``) を返す。
+     ``GET …/open-data`` は実体を直接配信 (checksum は ``X-Checksum-Sha256``)。
+   - Offer は ``demo-offer --access-class open|registered`` で生成
+     (``WEKO_DAC_REGISTERED_TERMS_URI`` の ``acceptedTerms`` 要件は Visa の ``value`` と
+     文字列一致が必要)。詳細は ``docs/CHANGES_ja.md`` §10 / ``docs/OPERATIONS_ja.md`` §8。
 
 セットアップ
 ============

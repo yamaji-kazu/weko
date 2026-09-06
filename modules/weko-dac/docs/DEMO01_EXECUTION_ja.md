@@ -106,6 +106,30 @@
   `credential_format:ga4gh-visa+jwt` で記録。
 - 異常系: 旧 aud → 401、同一 jti → 409、`presented_by` 不在 → 403。
 
+---
+
+## 第2段階 実施記録 — open / registered (2026-09-06)
+
+同一コホート 3 層 (controlled=`records/2000001` / registered=`records/2000002` /
+open=`records/2000003`) を、待ち時間 数日 / 数秒 / ゼロ で通した際に判明した問題と対処。
+実装内容は `CHANGES_ja.md` §10、運用は `OPERATIONS_ja.md` §8。
+
+| # | 症状 / 背景 | 対処 | 該当 |
+|---|---|---|---|
+| 13 | `demo-offer --access-class registered` が `NameError: current_app` | `cli.py` に `from flask import current_app` を追加 | `weko-dac/cli.py` |
+| 14 | open の checksum がヘッダのみ (DG が区分ごとに読み方を変える) | `open-access` を **access-token と同形の JSON** (`download_url`+`checksum`) に (O-1/O-3) | `weko-dac/views.py` |
+| 15 | registered 用 `issue-visa.mjs` が `SyntaxError: Unexpected token '?'` | ホスト node v12 が古い。wallet コンテナ(node22)内で `--passport` 実行 | (Trust基盤) |
+| 16 | password grant が `Client not allowed for direct access grants` | dar-agent は direct access grants 無効。**dg-portal (public, secret不要)** で取得→dar-agent で token-exchange | (IdP 運用) |
+| 17 | `.140/.141/.112` へ両方タイムアウト | mdx ヘアピン DNAT が未保存で再起動時に消失。§3 再適用＋`netfilter-persistent save` | (基盤) `OPERATIONS §3` |
+| 18 | registered 発行で `wallet_credential_id:null` | 発行時にコンテナ→Wallet(.141) 未到達 (DNAT 落ち)。`invenio dac pump` で再送→`wc-…` | `weko-dac/services.py` |
+| 19 | 大きな貼り付けで SSH 端末が行を落とす | コード/データは tar でホスト `~/` へ scp→`git apply`/`docker cp`。base64 直貼りは不可 | (受け渡し手順) |
+| 20 | マイ許諾に 2000001 の許諾が重複十数件 | Wallet `DELETE …/holders/{sub}/credentials/{id}` で1件残して disposed。小道具は残す (D-2) | (Wallet) |
+
+到達点(実測): **open** = `open-access`→`download_url`→実体で sha 一致 (`a01f194b…`、認証なし)。
+**registered** = 委任トークン(`sub=hanako`/`act.sub=dar-001`/`scope rags:apply`)→passport 決定的
+検証 (`unmet []`) → `201 granted` → Agreement `agr-app-2026-3cfdbc90` → Visa → Wallet
+`wc-beefde6d…` → マイ許諾掲載。**controlled** = 第1段階完了・マイ許諾も1件に整理。
+
 ## 既知の制約 / 本番移行時の課題
 
 `README.rst`「デモ簡略化」表のとおり(Trust Chain/Trust Mark/DPoP は静的 allowlist で代替、

@@ -241,3 +241,44 @@ API 全 404 障害の再発防止)。
 | Wallet deposit 失敗のまま | dac pump が自動再送。SECRET/URL/CA バンドル確認。`WEKO_DAC_WALLET_API_BASE` 未設定だと deposit されず Visa はアプリのリソース経由のみ |
 | /api/dac/v1 が全パス 404 (Werkzeug 定型文) | weko-dac 未インストール状態で起動 (コンテナ再作成後など)。entrypoint の自動インストール導入後は発生しないはずだが、発生時は `pip show weko-dac` を確認し `pip install -e` → restart |
 | 再起動後に invenio.cfg の設定が消える | entrypoint が `scripts/instance.cfg` から再生成するため。恒久設定はテンプレート側に書く (§4/§5) |
+
+## 8. 第2段階 (open / registered) の運用
+
+- **3区分の配信ファイルと Offer 登録** (コンテナ内): 配信ファイルは web コンテナの
+  `/var/tmp/` に置く (controlled=`/var/tmp/nii_cohort_2020_2024.csv`)。ホスト側のファイルは
+  `docker compose -f docker-compose2.yml cp <host file> web:/var/tmp/` で入れ、
+  `docker compose -f docker-compose2.yml exec web invenio dac demo-offer "<records URL>"
+  --access-class open|registered --file <container path>` で登録。`--file` から sha256 を
+  自動計算して `checksum` に入れる (3区分とも登録漏れなきよう)。
+- **registered の資格要件は Visa の値と一致必須**: registered Offer は
+  `researcherStatus`(有無) と `acceptedTerms`(値一致) を要求する。`acceptedTerms` の `@id` は
+  Trust基盤が Visa に入れる `value` と**文字列一致**が必要 (`WEKO_DAC_REGISTERED_TERMS_URI`
+  既定 `https://rdc.nii.ac.jp/terms/registered-access/v1`、到達性は見ない)。
+- **新ルートの反映**: `open-access`/`registered-access` は起動時読み込み。コード変更後は
+  `docker compose -f docker-compose2.yml restart web worker` で反映 (CLI は都度新プロセスなので
+  即反映される)。
+- **registered 用 passport の発行** (Trust基盤): `issue-visa.mjs` はホスト node が古いと
+  `SyntaxError: Unexpected token '?'` になる。**wallet コンテナ (node22) の中で**実行する:
+  `docker exec aifs-idp-grant-wallet-1 node scripts/issue-visa.mjs --passport --sub "<研究者UUID>"
+  --value <affiliation> > ~/hanako_passport.jwt`。`--passport` は 3 種
+  (Affiliation/Researcher/AcceptedTerms) を `ga4gh_passport_v1` に束ねる。鍵
+  `/run/secrets/visa-key` はコンテナ内パス。
+- **委任トークンの取得** (registered をHTTPで検証する場合): `dg-portal` は**パブリック
+  クライアント (secret 不要)** で password grant → `dar-agent` で token-exchange。dar-agent は
+  direct access grants **無効**なので password grant には使えない (詳細 `DEMO01_curl_ja.md` §3)。
+- **マイ許諾 (Wallet) の掃除**: テスト累積の重複許諾は Wallet の
+  `DELETE {wallet}/holders/{sub}/credentials/{id}` (holder 本人トークン + `rags:retrieve` scope)
+  で `disposed` にできる。台本5 で「マイ許諾」を映す前に `records/2000001` の重複を1件残して掃除
+  (jq で対象抽出→DELETE ループ)。**物語の小道具 (HPCI 計算資源/クライオ電顕/医用イメージング/
+  別リポジトリコホート) は残す**。open (`records/2000003`) は許諾を持たないので一覧に出ない。
+
+### 8.1 第2段階のトラブルシュート
+
+| 症状 | 原因 → 対処 |
+|---|---|
+| registered が `403 requirements_not_met` | passport の資格 Visa 不足、または `acceptedTerms` の値不一致。応答の `unmet_requirements` を見る。Offer の `@id` と Visa `value` の文字列一致 (末尾スラッシュ等) を確認 |
+| registered 発行で `wallet_credential_id:null` | 発行時にコンテナ→Wallet(.141) が未到達 (DNAT 落ち等)。`invenio dac pump` で再送 (`wallet deposits: 1`) |
+| `demo-offer --access-class registered` が `NameError: current_app` | `cli.py` の `current_app` 未 import。CHANGES §10 の修正を適用 |
+| `issue-visa.mjs` が `SyntaxError: Unexpected token '?'` | ホスト node が古い (v12、`??` 非対応)。wallet コンテナ(node22)内で実行する |
+| password grant が `Client not allowed for direct access grants` | そのクライアントは direct access grants 無効。`dg-portal` (public) を使う |
+| `.140`/`.141`/`.112` へ両方タイムアウト (再起動後) | §3 のヘアピン DNAT が未保存で消えた。§3 を再適用し **`sudo netfilter-persistent save`** で永続化 |
