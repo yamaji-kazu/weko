@@ -169,3 +169,5 @@ access-token の応答と callback (§6.3 / §5.7)
   (DEMO-21 受入条件1: 申請→承認→Visa→deposit→配信)
 - `docs/OPERATIONS_ja.md <docs/OPERATIONS_ja.md>`_ — デモ環境の運用手順書
   (公開設定・DNAT・証明書・Shibboleth 連携・環境変数・トラブルシュート)
+- `docs/DEMO01_EXECUTION_ja.md <docs/DEMO01_EXECUTION_ja.md>`_ — デモ01 第1段階の
+  実施記録 (遂行中に判明した問題→対処→該当箇所の一覧・引き継ぎ用)
