@@ -267,8 +267,14 @@ def grant_registered(dataset_id, researcher_sub, agent_id,
     if unmet:
         audit.record('registered.denied',
                      subject={'dataset_id': dataset_id},
-                     actor={'kind': 'agent', 'id': agent_id},
-                     payload={'unmet': unmet, 'method': method})
+                     actor={'kind': 'agent', 'id': agent_id,
+                            'on_behalf_of': researcher_sub},
+                     payload={'unmet': unmet, 'method': method,
+                              'access_class': 'registered',
+                              'credential_types': [v.get('type')
+                                                   for v in visas],
+                              'purpose': intended_use or {},
+                              'presentation_absent': presentation_absent})
         db.session.commit()
         raise RegError(403, 'requirements_not_met',
                        '資格要件が満たされていません', unmet=unmet)
@@ -295,10 +301,15 @@ def grant_registered(dataset_id, researcher_sub, agent_id,
     audit.record('registered.granted',
                  subject={'dataset_id': dataset_id,
                           'application_id': application.application_id},
-                 actor={'kind': 'agent', 'id': agent_id},
+                 actor={'kind': 'agent', 'id': agent_id,
+                        'on_behalf_of': researcher_sub},
                  payload={'visa_types': [v.get('type') for v in visas],
                           'visa_sources': [v.get('source') for v in visas],
-                          'method': method, 'decision': 'granted'})
+                          'method': method, 'decision': 'granted',
+                          'access_class': 'registered',
+                          'credential_types': [v.get('type') for v in visas],
+                          'purpose': intended_use or {},
+                          'presentation_absent': presentation_absent})
     db.session.commit()
 
     # 許諾発行 (§6) — controlled の承認分岐と同一手順を再利用

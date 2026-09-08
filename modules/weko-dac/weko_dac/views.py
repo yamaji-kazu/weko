@@ -438,6 +438,7 @@ def _access_token_impl(raw_dataset_id):
         visa_payload = None
         used_cid = None
         grant_seen = False
+        cred_types = []
         for el in elements:
             fmt = el.get('credential_format') or 'ga4gh-visa+jwt'
             if fmt != 'ga4gh-visa+jwt':
@@ -453,6 +454,7 @@ def _access_token_impl(raw_dataset_id):
                 raise AuthError(403, 'subject_mismatch',
                                 'credential.sub != token.sub')
             v = p.get('ga4gh_visa_v1') or {}
+            cred_types.append(v.get('type'))
             if v.get('type') == 'ControlledAccessGrants':
                 grant_seen = True
                 if v.get('value') == dataset_id:
@@ -468,7 +470,9 @@ def _access_token_impl(raw_dataset_id):
                             'presented')
         meta = {'presentation_absent': presentation_absent,
                 'credential_format': 'ga4gh-visa+jwt',
-                'credential_id': used_cid}
+                'credential_id': used_cid,
+                'credential_types': cred_types,
+                'purpose': pmeta.get('purpose')}
     except AuthError as err:
         db.session.rollback()
         return err.as_response()
@@ -481,11 +485,15 @@ def _access_token_impl(raw_dataset_id):
     audit.record('data.accessed',
                  subject={'agreement_uid': visa_payload.get('rdc_agreement'),
                           'dataset_id': dataset_id},
-                 actor={'kind': 'agent', 'id': g.dac_agent},
-                 payload={'presentation_absent':
-                          meta['presentation_absent'],
+                 actor={'kind': 'agent', 'id': g.dac_agent,
+                        'on_behalf_of': g.dac_sub},
+                 payload={'access_class': offer_row.access_class,
+                          'purpose': meta['purpose'],
                           'credential_format': meta['credential_format'],
-                          'credential_id': meta['credential_id']})
+                          'credential_types': meta['credential_types'],
+                          'credential_id': meta['credential_id'],
+                          'presentation_absent':
+                          meta['presentation_absent']})
     db.session.commit()
     return jsonify({
         'download_url': '{0}/api/dac/v1/download?token={1}'.format(
@@ -555,7 +563,9 @@ def _open_impl(raw):
     audit.record('data.accessed',
                  subject={'dataset_id': dataset_id},
                  actor={'kind': 'public', 'id': 'anonymous'},
-                 payload={'access_route': 'open', 'presentation_absent': True})
+                 payload={'access_class': 'open', 'access_route': 'open',
+                          'credential_types': [], 'purpose': None,
+                          'presentation_absent': True})
     db.session.commit()
     uri = offer_row.distribution_uri
     if uri.startswith('http://') or uri.startswith('https://'):
@@ -604,7 +614,9 @@ def _open_access_impl(raw):
     audit.record('data.accessed',
                  subject={'dataset_id': dataset_id},
                  actor={'kind': 'public', 'id': 'anonymous'},
-                 payload={'access_route': 'open', 'presentation_absent': True})
+                 payload={'access_class': 'open', 'access_route': 'open',
+                          'credential_types': [], 'purpose': None,
+                          'presentation_absent': True})
     db.session.commit()
     return jsonify({
         'download_url': '{0}/api/dac/v1/download?token={1}'.format(
