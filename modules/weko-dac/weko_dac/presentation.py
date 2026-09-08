@@ -39,6 +39,12 @@ _GA4GH_TO_RDC = {
 _RESOURCE_BEARING = {'ControlledAccessGrants'}
 
 
+def rdc_type(ga4gh_type):
+    """GA4GH Visa type を rdc: credential_type に写像 (分冊04 §5.3.2)。
+    未知の型はそのまま返す。監査 (§6.1 credential_types) 等で用いる。"""
+    return _GA4GH_TO_RDC.get(ga4gh_type, ga4gh_type)
+
+
 def check_issuer_authority(ga4gh_type, source, offer_assigner):
     """発行者信頼の二段検証 (RDC-AAP-01 §3.2)。
 

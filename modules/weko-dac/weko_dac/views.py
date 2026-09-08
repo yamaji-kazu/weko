@@ -454,7 +454,7 @@ def _access_token_impl(raw_dataset_id):
                 raise AuthError(403, 'subject_mismatch',
                                 'credential.sub != token.sub')
             v = p.get('ga4gh_visa_v1') or {}
-            cred_types.append(v.get('type'))
+            cred_types.append(presentation.rdc_type(v.get('type')))
             # 発行者の権限 (§3.2 / §6.3 手順3)。未強制の間は素通り。
             presentation.check_issuer_authority(
                 v.get('type'), v.get('source'),

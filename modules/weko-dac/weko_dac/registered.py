@@ -255,10 +255,12 @@ def grant_registered(dataset_id, researcher_sub, agent_id,
                            'presented_by != token act.sub')
         visas, method = _visas_from_elements(elements, researcher_sub)
         presentation_absent = False
+        pres_purpose = meta.get('purpose')
     elif passport_jwt:
         # 移行期: 生 Passport 入力 (分冊01 §11.2.2)
         visas, method = verify_passport_visas(passport_jwt, researcher_sub)
         presentation_absent = True
+        pres_purpose = None
     else:
         raise RegError(400, 'presentation_required',
                        'presentation (移行期は passport) が必要です')
@@ -276,9 +278,10 @@ def grant_registered(dataset_id, researcher_sub, agent_id,
                             'on_behalf_of': researcher_sub},
                      payload={'unmet': unmet, 'method': method,
                               'access_class': 'registered',
-                              'credential_types': [v.get('type')
-                                                   for v in visas],
-                              'purpose': intended_use or {},
+                              'credential_types': [presentation.rdc_type(
+                                  v.get('type')) for v in visas],
+                              'purpose': pres_purpose or 'registered-access',
+                              'intended_use': intended_use or {},
                               'presentation_absent': presentation_absent})
         db.session.commit()
         raise RegError(403, 'requirements_not_met',
@@ -312,8 +315,10 @@ def grant_registered(dataset_id, researcher_sub, agent_id,
                           'visa_sources': [v.get('source') for v in visas],
                           'method': method, 'decision': 'granted',
                           'access_class': 'registered',
-                          'credential_types': [v.get('type') for v in visas],
-                          'purpose': intended_use or {},
+                          'credential_types': [presentation.rdc_type(
+                              v.get('type')) for v in visas],
+                          'purpose': pres_purpose or 'registered-access',
+                          'intended_use': intended_use or {},
                           'presentation_absent': presentation_absent})
     db.session.commit()
 
