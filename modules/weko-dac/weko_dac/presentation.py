@@ -28,6 +28,44 @@ def _expected_aud():
             or current_app.config['WEKO_DAC_ENTITY_ID'])
 
 
+#: GA4GH Visa type → rdc: credential_type (分冊04 §5.3.2 の写像)
+_GA4GH_TO_RDC = {
+    'ControlledAccessGrants': 'rdc:DataAccessGrant',
+    'ResearcherStatus': 'rdc:ResearcherStatus',
+    'AffiliationAndRole': 'rdc:Affiliation',
+    'AcceptedTermsAndPolicies': 'rdc:AcceptedTerms',
+}
+#: resource を持つ (資源を対象とする) 許諾系の GA4GH type
+_RESOURCE_BEARING = {'ControlledAccessGrants'}
+
+
+def check_issuer_authority(ga4gh_type, source, offer_assigner):
+    """発行者信頼の二段検証 (RDC-AAP-01 §3.2)。
+
+    - 型の権限 (§3.2.1): 発行者 (``source``) が allowlist に登録され、その
+      ``allowed_credential_types`` に当該型を含むこと。
+    - 資源の権限 (§3.2.2): resource を持つ許諾系のみ、``source`` == Offer の
+      ``odrl:assigner`` (分冊05 §3)。
+
+    ``WEKO_DAC_ENFORCE_ISSUER_TRUST`` が False の間は未強制 (移行期。allowlist に
+      ``allowed_credential_types`` が入るまで現行フローを壊さない)。不適合は
+    ``AuthError(403, 'issuer_not_authorized')``。
+    """
+    if not current_app.config.get('WEKO_DAC_ENFORCE_ISSUER_TRUST', False):
+        return
+    rdc_type = _GA4GH_TO_RDC.get(ga4gh_type, ga4gh_type)
+    entry = allowlist.get_entity(source) if source else None
+    allowed = (entry or {}).get('allowed_credential_types')
+    if not entry or not allowed or rdc_type not in allowed:
+        raise AuthError(403, 'issuer_not_authorized',
+                        'issuer %r is not authorized to issue %s'
+                        % (source, rdc_type))
+    if ga4gh_type in _RESOURCE_BEARING and source != offer_assigner:
+        raise AuthError(403, 'issuer_not_authorized',
+                        'issuer_ref %r != Offer assigner %r'
+                        % (source, offer_assigner))
+
+
 def _decode_outer(presentation):
     """Verify the Wallet-signed outer JWS. Returns the payload."""
     try:

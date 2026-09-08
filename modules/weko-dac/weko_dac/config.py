@@ -39,6 +39,12 @@ WEKO_DAC_REGISTERED_TERMS_URI = os.environ.get(
 #: ODRL profile URI (spec vol.05).
 WEKO_DAC_ODRL_PROFILE = 'https://rdc.nii.ac.jp/ns/odrl-profile/v1'
 
+#: 発行者信頼 (RDC-AAP-01 §3.2) を強制するか。移行期は False (コードは入るが
+#: 未強制)。allowlist の各エントリに ``allowed_credential_types`` が入ったら True に
+#: して、型の権限・資源の権限を強制する。
+WEKO_DAC_ENFORCE_ISSUER_TRUST = os.environ.get(
+    'WEKO_DAC_ENFORCE_ISSUER_TRUST', '').lower() in ('1', 'true', 'yes')
+
 #: RFC 9457 Problem Details ``type`` URI の基底 (RDC-AAP-01 §5.8.2)。
 #: type = ``<基底>/<コードのアンダースコアをハイフンに置換>`` で自動生成する。
 #: 例: requirements_not_met → https://rdc.nii.ac.jp/ns/problems/requirements-not-met

@@ -262,6 +262,11 @@ def grant_registered(dataset_id, researcher_sub, agent_id,
     else:
         raise RegError(400, 'presentation_required',
                        'presentation (移行期は passport) が必要です')
+    # 発行者の権限 (§3.2 / §6.3 手順3)。未強制の間は素通り (移行期)。
+    assigner = (offer_row.offer or {}).get('assigner')
+    for v in visas:
+        presentation.check_issuer_authority(
+            v.get('type'), v.get('source'), assigner)
     # Authorization (§12.2 決定的突合)
     unmet = unmet_requirements(offer_row.offer, visas, intended_use)
     if unmet:

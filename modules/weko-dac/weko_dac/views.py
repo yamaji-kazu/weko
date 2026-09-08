@@ -455,6 +455,10 @@ def _access_token_impl(raw_dataset_id):
                                 'credential.sub != token.sub')
             v = p.get('ga4gh_visa_v1') or {}
             cred_types.append(v.get('type'))
+            # 発行者の権限 (§3.2 / §6.3 手順3)。未強制の間は素通り。
+            presentation.check_issuer_authority(
+                v.get('type'), v.get('source'),
+                (offer_row.offer or {}).get('assigner'))
             if v.get('type') == 'ControlledAccessGrants':
                 grant_seen = True
                 if v.get('value') == dataset_id:
