@@ -11,7 +11,7 @@ from flask import (Blueprint, Response, current_app, g, jsonify, redirect,
                    request, send_file)
 from invenio_db import db
 
-from . import allowlist, audit, registered, services, signing
+from . import allowlist, audit, presentation, registered, services, signing
 from .auth import (AuthError, jwk_to_public_key, problem_title, problem_type,
                    require_rags_token, verify_jws)
 from .models import (DacAgreement, DacApplication, DacMessage, DacOffer,
@@ -351,95 +351,19 @@ def withdraw(app_id):
 # Clearinghouse: access token + download (§6.3)
 # --------------------------------------------------------------------------
 
-def _verify_presentation(presentation, dataset_id):
-    """Verify a Grant Presentation; returns (visa_payload, meta).
+# 提示物の外側検証と配列抽出は presentation.verify_presentation() に共有化した
+# (分冊05 §11 / RDC-AAP-01 §6.3・§11.2.2)。access-token と registered-access は
+# 同一の検証器を用いる。
 
-    Dispatches on the JWS header ``typ`` (RDC-AAP-04 §8.3 forward-compat:
-    new presentation formats plug in beside 'rdc-gp+jwt')."""
+
+def _verify_dac_visa(raw):
+    """Verify a Visa issued by THIS DAC (signature via our jwks + active
+    status). Returns the payload. The dataset match (§6.3 手順4) is done by
+    the caller against the **raw** value (分冊05 §11.3)."""
     try:
-        header = pyjwt.get_unverified_header(presentation)
-    except Exception as ex:
-        raise AuthError(400, 'invalid_presentation',
-                        'Malformed presentation: %s' % ex)
-    typ = header.get('typ')
-    handlers = current_app.config['WEKO_DAC_PRESENTATION_TYPES']
-    if typ not in handlers:
-        raise AuthError(400, 'unsupported_presentation_type',
-                        'typ %s not accepted' % typ)
-    # Expected Presentation audience (§6.3). Defaults to the DAC identifier
-    # (WEKO_DAC_PRESENTATION_AUD → WEKO_DAC_DAC_ID); agreed with DG/Wallet.
-    entity_id = current_app.config.get('WEKO_DAC_PRESENTATION_AUD') \
-        or current_app.config['WEKO_DAC_ENTITY_ID']
-    # Wallet trust: static allowlist (DEMO-24 §3) supplies the wallet's
-    # jwks (inline or by jwks_uri); config URL is the fallback.
-    inline_keys = allowlist.wallet_inline_jwks()
-    if inline_keys:
-        try:
-            header = pyjwt.get_unverified_header(presentation)
-            key = None
-            for k in inline_keys:
-                if not header.get('kid') or k.get('kid') == header['kid']:
-                    key = k
-                    break
-            payload = pyjwt.decode(
-                presentation, jwk_to_public_key(key),
-                algorithms=['ES256', 'RS256'], audience=entity_id)
-        except AuthError:
-            raise
-        except Exception as ex:
-            raise AuthError(401, 'invalid_presentation',
-                            'Presentation verification failed: %s' % ex)
-    else:
-        wallet_jwks = allowlist.wallet_jwks_url()
-        if not wallet_jwks:
-            raise AuthError(503, 'wallet_not_configured',
-                            'No wallet jwks (allowlist or '
-                            'WEKO_DAC_WALLET_JWKS_URL)')
-        payload = verify_jws(presentation, wallet_jwks, audience=entity_id)
-    wallet_entity = allowlist.wallet_entity()
-    if wallet_entity and payload.get('iss') != wallet_entity['entity_id']:
-        raise AuthError(403, 'unknown_wallet',
-                        'Presentation issuer %s is not the allowlisted '
-                        'wallet' % payload.get('iss'))
-    # freshness (exp <= iat + 300 already enforced by wallet; re-check age)
-    max_age = current_app.config['WEKO_DAC_PRESENTATION_MAX_AGE']
-    iat = payload.get('iat') or 0
-    if time.time() - iat > max_age:
-        raise AuthError(401, 'presentation_expired',
-                        'Presentation older than %ds' % max_age)
-    # replay prevention
-    jti = payload.get('jti')
-    if not jti:
-        raise AuthError(400, 'invalid_presentation', 'jti missing')
-    if DacPresentationJti.query.get(jti):
-        raise AuthError(409, 'presentation_replayed',
-                        'jti already used')
-    db.session.add(DacPresentationJti(
-        jti=jti, presented_by=payload.get('presented_by')))
-    visa_jwt = payload.get('credential')
-    if not visa_jwt:
-        raise AuthError(400, 'invalid_presentation', 'credential missing')
-    # presenting agent must also be allowlisted (Trust Chain 代替)
-    if allowlist.check_agent(payload.get('presented_by') or '') == 'denied':
-        raise AuthError(403, 'agent_not_allowlisted',
-                        'presented_by %s is not in the static allowlist'
-                        % payload.get('presented_by'))
-    meta = {'presentation_sub': payload.get('sub'),
-            'presented_by': payload.get('presented_by'),
-            'credential_id': payload.get('credential_id'),
-            'credential_format': 'ga4gh-visa+jwt',
-            'presentation_absent': False}
-    return visa_jwt, meta
-
-
-def _verify_visa(visa_jwt, dataset_id):
-    """Verify an inner Visa issued by this DAC. Returns its payload."""
-    try:
-        header = pyjwt.get_unverified_header(visa_jwt)
         pub_jwk = signing.public_jwks()['keys'][0]
-        from .auth import jwk_to_public_key
         payload = pyjwt.decode(
-            visa_jwt, jwk_to_public_key(pub_jwk), algorithms=['ES256'],
+            raw, jwk_to_public_key(pub_jwk), algorithms=['ES256'],
             options={'verify_aud': False})
     except pyjwt.ExpiredSignatureError:
         raise AuthError(403, 'visa_expired', 'Visa has expired')
@@ -450,10 +374,6 @@ def _verify_visa(visa_jwt, dataset_id):
     if row is None or row.current_status() != 'active':
         raise AuthError(403, 'visa_revoked_or_unknown',
                         'Visa is not active')
-    visa_v1 = payload.get('ga4gh_visa_v1') or {}
-    if visa_v1.get('value') != dataset_id:
-        raise AuthError(403, 'visa_dataset_mismatch',
-                        'Visa is not for this dataset')
     return payload
 
 
@@ -488,37 +408,67 @@ def _access_token_impl(raw_dataset_id):
                         'No policy registered for %s' % dataset_id)
     body = request.get_json(silent=True) or {}
     try:
+        # 提示物の外側検証 + 配列抽出は共有検証器 (presentation.py) で行う。
+        # §11.2 の読み順 (credentials[] 優先, 無ければ単数 credential) も内包。
         if body.get('presentation'):
-            visa_jwt, meta = _verify_presentation(
-                body['presentation'], dataset_id)
+            pmeta, elements = presentation.verify_presentation(
+                body['presentation'], expected_purpose='data-retrieval')
+            presentation_absent = False
         elif body.get('visa') and \
                 current_app.config['WEKO_DAC_ALLOW_DIRECT_VISA']:
-            # transitional fallback (§6.3): audit-flagged
-            visa_jwt = body['visa']
-            meta = {'presentation_sub': None,
-                    'presented_by': g.dac_agent,
-                    'credential_id': None,
-                    'credential_format': 'ga4gh-visa+jwt',
-                    'presentation_absent': True}
+            # 移行期フォールバック (§6.3): 監査に presentation_absent を立てる
+            pmeta = {'sub': None, 'presented_by': g.dac_agent}
+            elements = [{'raw': body['visa'],
+                         'credential_format': 'ga4gh-visa+jwt',
+                         'credential_type': None, 'credential_id': None}]
+            presentation_absent = True
         else:
             return _problem(400, 'presentation_required',
                             'Body must contain "presentation"')
-        visa_payload = _verify_visa(visa_jwt, dataset_id)
-        # subject chain checks (§6.3 items 3–4)
-        if meta['presentation_sub'] is not None:
-            if visa_payload.get('sub') != meta['presentation_sub']:
-                raise AuthError(403, 'subject_mismatch',
-                                'visa.sub != presentation.sub')
-            if meta['presentation_sub'] != g.dac_sub:
+        # 提示物の sub / presented_by (§6.3 手順5-6)
+        if pmeta['sub'] is not None:
+            if pmeta['sub'] != g.dac_sub:
                 raise AuthError(403, 'subject_mismatch',
                                 'presentation.sub != token.sub')
-            if meta['presented_by'] != g.dac_agent:
+            if pmeta['presented_by'] != g.dac_agent:
                 raise AuthError(403, 'agent_mismatch',
                                 'presented_by != token act.sub')
-        else:
-            if visa_payload.get('sub') != g.dac_sub:
+        # 内包クレデンシャルを各要素検証し、当該 dataset の DataAccessGrant を
+        # 探す (§6.3 手順2-4)。判定値は原本 raw から (分冊05 §11.3)。
+        visa_payload = None
+        used_cid = None
+        grant_seen = False
+        for el in elements:
+            fmt = el.get('credential_format') or 'ga4gh-visa+jwt'
+            if fmt != 'ga4gh-visa+jwt':
+                raise AuthError(400, 'unsupported_presentation_type',
+                                'credential_format %s not yet supported' % fmt)
+            p = _verify_dac_visa(el['raw'])
+            csub = p.get('sub')
+            if pmeta['sub'] is not None:
+                if csub and csub != pmeta['sub']:
+                    raise AuthError(403, 'subject_mismatch',
+                                    'credential.sub != presentation.sub')
+            elif csub != g.dac_sub:
                 raise AuthError(403, 'subject_mismatch',
-                                'visa.sub != token.sub')
+                                'credential.sub != token.sub')
+            v = p.get('ga4gh_visa_v1') or {}
+            if v.get('type') == 'ControlledAccessGrants':
+                grant_seen = True
+                if v.get('value') == dataset_id:
+                    visa_payload = p
+                    used_cid = el.get('credential_id')
+                    break
+        if visa_payload is None:
+            if grant_seen:
+                raise AuthError(403, 'visa_dataset_mismatch',
+                                'Visa is not for this dataset')
+            raise AuthError(403, 'requirements_not_met',
+                            'no DataAccessGrant for this dataset was '
+                            'presented')
+        meta = {'presentation_absent': presentation_absent,
+                'credential_format': 'ga4gh-visa+jwt',
+                'credential_id': used_cid}
     except AuthError as err:
         db.session.rollback()
         return err.as_response()
