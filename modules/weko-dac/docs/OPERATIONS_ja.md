@@ -172,6 +172,8 @@ docker-compose2.yml の **web と worker 両方**の environment に設定:
 | WEKO_DAC_SCOPE_OWNER_SUB_ONLY | (既定 false / デモ true) | 申請の閲覧スコープ(§5.4)。true で「研究者本人(トークン sub)は自分の申請を、委任エージェントに依らず閲覧可」。false は仕様どおり委任ペア(sub + act.sub)厳密一致 |
 | WEKO_DAC_PRESENTATION_AUD | (既定 = Entity ID) | Presentation の `aud` 検証値＝**受信側(DAC)の Entity ID** (RFC7519 §4.1.3 / GA4GH AAI)。デモは `https://163.220.178.140`。DAC の同定は Visa `ga4gh_visa_v1.source` / Agreement `odrl:assigner` が保持 |
 | WEKO_DAC_DOWNLOAD_URL_TTL | (既定 300 / デモ 900) | access-token が返す署名付き download_url の有効期限(秒) |
+| WEKO_DAC_PROBLEM_TYPE_BASE | (既定 `https://rdc.nii.ac.jp/ns/problems`) | RFC 9457 Problem Details の `type` 基底 (§5.8.2)。`type=<基底>/<code の `_`→`-`>` を自動生成 |
+| WEKO_DAC_ENFORCE_ISSUER_TRUST | (既定 false) | v0.4 発行者信頼(§3.2)の強制。**allowlist の各エントリに `allowed_credential_types` を入れてから true にする**。true で型の権限・資源の権限を強制し、不適合は `403 issuer-not-authorized` |
 
 これらは `WEKO_DAC_*` の Flask config で、`scripts/instance.cfg` テンプレート末尾に書く
 (環境変数でも可)。デモでは `WEKO_DAC_SCOPE_OWNER_SUB_ONLY = True` /
@@ -201,6 +203,27 @@ deposit されず**、callback の `wallet_deposited`/`wallet_credential_id` が
 weko-dac のインストールは `scripts/entrypoint_web.sh` / `entrypoint_worker.sh`
 で毎起動時に保証される (コンテナ再作成で venv が消える対策。2026-09-02 の
 API 全 404 障害の再発防止)。
+
+### 5.1 v0.4 (Credential Wallet) の追加設定
+
+- **提示物 (presentation)**: v0.4 で `registered-access` / `access-token` の入力は Credential
+  Wallet の提示物 (`credentials[]` 配列)。DG は W-2 `POST {wallet}/holders/{sub}/presentations`
+  に `{"aud","purpose","credential_ids":[…]}` で発行を受け、その JWS を body の `presentation`
+  に載せる。公開基盤は移行期、旧 `passport` / 旧名 `purpose` も受理する (**`presentation` /
+  `intended_use` を優先**、旧名はフォールバック)。
+- **発行者信頼 (`WEKO_DAC_ENFORCE_ISSUER_TRUST`)**: true にする前に、**allowlist の各発行者
+  エントリに `allowed_credential_types` (rdc: 型の配列) を付与**しておくこと。付与例:
+  - `visa_issuer` (学認/トラスト基盤) → `["rdc:ResearcherStatus","rdc:Affiliation","rdc:AcceptedTerms"]`
+  - DAC 発行者 (`entity_id == WEKO_DAC_DAC_ID`。無ければ 1 エントリ追加) → `["rdc:DataAccessGrant"]`
+
+  未付与のまま true にすると全提示が `403 issuer-not-authorized` になる。付与後に web/worker の
+  environment へ `WEKO_DAC_ENFORCE_ISSUER_TRUST=true` を入れて再起動 → 未登録発行者や
+  資源の権限不一致 (`source != Offer assigner`) が実測できる。
+- **mdx トポロジ (再掲・重要)**: デモは **2 台の別 VM が同じホスト名 `ubuntu-2204`** を名乗る。
+  `docker ps` の中身で判別する — WEKO VM = `weko-*` 一式 (内部 `10.20.116.19` / 浮動 `.140`)、
+  IdP/Wallet VM = `aifs-idp-*` (keycloak・grant-wallet。内部 `10.20.112.103` / 浮動 `.141`)。
+  §3 の DNAT・`netfilter-persistent save` は **各 VM で個別に**。監査 DB (`dac_audit_outbox`) は
+  WEKO VM の `weko-web-1` 内、passport 署名鍵は IdP VM の `aifs-idp-grant-wallet-1` 内。
 
 ## 6. 定常運用
 

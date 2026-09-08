@@ -130,6 +130,27 @@ open=`records/2000003`) を、待ち時間 数日 / 数秒 / ゼロ で通した
 検証 (`unmet []`) → `201 granted` → Agreement `agr-app-2026-3cfdbc90` → Visa → Wallet
 `wc-beefde6d…` → マイ許諾掲載。**controlled** = 第1段階完了・マイ許諾も1件に整理。
 
+## v0.4 実施記録 — presentation 経路 (2026-09-07〜08, rdc-aap-v0.4/v0.4.1)
+
+Credential Wallet 一般化 (提示物が配列) に追従。K-1〜K-5 を段階配備し、passport 移行経路と
+presentation 経路の両方で実測。詳細な変更点は `CHANGES_ja.md` §11。
+
+| # | 確認 | 実測 |
+|---|---|---|
+| K-3 配列読み | 併記停止 (`LEGACY_SINGLE_CLAIMS=false`) 後の無回帰 | a3=`visa_dataset_mismatch PASS`、台本5=監査3件/取得3経路200。`credentials[]` のみでも通る (C14 型ギャップ解消) |
+| K-1 presentation 経路 | W-2 で資格2件を1提示→registered-access | `201 granted` (passport ではなく提示物で自動許諾) |
+| L1 解決 (配列+2要件) | ResearcherStatus 1件のみ提示 | `403 requirements_not_met` / `unmet=[rdc:acceptedTerms]` |
+| A-3 対象外流用 | 2000002 の Visa を 2000001 に提示 | `403 visa_dataset_mismatch` |
+| K-5 監査 | `data.accessed` の新項目 | `access_class` / `on_behalf_of`(=研究者sub) / `credential_types` / `purpose` が3経路で記録 (open は on_behalf_of=None) |
+| W-6 | hanako のウォレット | `rdc:ResearcherStatus` / `rdc:Affiliation` / `rdc:AcceptedTerms` の3資格を確認 |
+
+実測コマンド: `reg_v04_presentation.sh` (W-2 で `credential_ids:[ResearcherStatus, AcceptedTerms]`,
+`purpose:registered-access` → `POST /registered-access` に `presentation` で載せる)、
+`a3_visa_mismatch.sh`、`scene5_evidence.sh` (監査は `dac_audit_outbox` を weko-web-1 内 psycopg2 で読む)。
+
+未了 (他チーム調整): K-4 発行者信頼の強制 (allowlist に `allowed_credential_types` 追加 →
+`WEKO_DAC_ENFORCE_ISSUER_TRUST=true`)、格納ノード (scve9=GRDM) の同一性確認 (DG)。
+
 ## 既知の制約 / 本番移行時の課題
 
 `README.rst`「デモ簡略化」表のとおり(Trust Chain/Trust Mark/DPoP は静的 allowlist で代替、

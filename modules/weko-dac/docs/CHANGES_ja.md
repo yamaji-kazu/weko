@@ -184,6 +184,53 @@ token-exchange、`sub=hanako`/`act.sub=dar-001`/`scope rags:apply`) → passport
 (`wc-…`) → hanako の「マイ許諾」掲載。open は許諾を持たないので提示履歴に出ず、台本5 の
 「監査ログ3件・提示履歴2件」の対比が成立。
 
+## 11. v0.4 対応 — Credential Wallet 一般化 (rdc-aap-v0.4/v0.4.1, 2026-09-07〜08)
+
+Grant Wallet を Credential Wallet に一般化した v0.4 に追従。提示物が **複数クレデンシャルの
+配列**になり、資格も許諾と同じ「ウォレットからの提示」に乗る (分冊04 §5.3 / 分冊05 §11)。
+仕様先行で RCOS へ確認 (`weko_confirm_v04.md`) → 回答 (v0.4.1) を反映。K-1〜K-5 を段階配備。
+
+- **提示物検証器の共有化** (`weko_dac/presentation.py` 新設): 外側 (Wallet 署名 JWS) の検証
+  (typ / `aud`=自 Entity ID / `iss`=allowlist の wallet / 鮮度 / `jti` リプレイ /
+  `presented_by` allowlist / `purpose`) と `credentials` 配列抽出を、registered-access と
+  access-token で**共有**。§11.2 の読み順 (`credentials[]` 優先、無ければ単数 `credential` を
+  1 件配列) を内包。**判定値は必ず原本 `raw` から読む** (分冊05 §11.3。外側の索引は署名対象外)。
+  旧 `views._verify_presentation` は撤去。
+- **K-1 `registered-access` の入力を `presentation` に** (`registered.py` / `views.py`):
+  提示物を §6.3 手順1〜3・5〜6 で検証 (手順4=対象一致は資格系に `resource` が無いため非適用)、
+  `purpose=='registered-access'` を確認し、内包する資格クレデンシャルを §12.2 で決定的突合。
+  **移行期は `passport` も受理**し `presentation_absent` を記録。**両方来た場合は `presentation`
+  を優先** (passport はフォールバック)。
+- **K-2 body の利用目的を `intended_use` に改称** (提示物の `purpose` クレームとの名前衝突回避)。
+  旧 `purpose` も移行期は受理 (`intended_use` 優先)。
+- **K-3 §6.3 (access-token / data-retrieval) を配列前提に**: 共有検証器を用い、`credentials[]` の
+  各要素を `credential_format` ごとに検証、原本の `ga4gh_visa_v1` から当該 dataset の
+  `DataAccessGrant` (`ControlledAccessGrants`, `value==dataset_id`) を探す。**一部だけ見て受理
+  しない**。単一 `visa` 直接提示の移行経路は `presentation_absent` で保持。
+- **K-4 発行者信頼 (§3.2) 二段検証** (`presentation.check_issuer_authority`): **型の権限** =
+  発行者 (`source`) が allowlist に登録され `allowed_credential_types` に当該型を含むこと
+  (GA4GH→rdc 写像: `ControlledAccessGrants`→`rdc:DataAccessGrant` 等)。**資源の権限** =
+  `resource` を持つ許諾系のみ `source == Offer の assigner`。不適合は `403 issuer-not-authorized`。
+  **強制は `WEKO_DAC_ENFORCE_ISSUER_TRUST` (既定 false) で段階化** — allowlist に
+  `allowed_credential_types` が入るまで未強制で現行フローを壊さない。`allowed_credential_types`
+  は**設定として**持つ (ハードコード禁止。Stage B で Trust Chain 解決に差し替わるため)。
+- **K-5 監査 `data.accessed` に代理元と区分** (04 §6.1): `actor.on_behalf_of` (エージェント時=
+  研究者 sub)・`access_class` (open/registered/controlled)・`credential_types`・`purpose` を追加。
+  `presentation_absent` は**移行フォールバック検出専用**に降格 (区分は `access_class`。O-6 解決)。
+  `registered.granted`/`denied` にも同項目。
+- **Problem Details `type` の自動生成** (§5.8.2): 先行して `type=<WEKO_DAC_PROBLEM_TYPE_BASE>/
+  <code の `_`→`-`>` を自動生成、`title` は人間可読ラベル (生コードは出さない)、
+  `application/problem+json` を付与。新コード `access-class-mismatch` / `purpose-not-permitted` /
+  `issuer-not-authorized` を追加 (§5.8.1 登録済み)。
+
+通しで確認した証跡 (2026-09-08): **presentation 経路**で W-2 (`POST /holders/{sub}/presentations`,
+`credential_ids:[ResearcherStatus, AcceptedTerms]`, `purpose:registered-access`) → registered-access
+→ `201 granted`。ResearcherStatus 1 件のみの提示 → `403 requirements_not_met`
+(`unmet=[rdc:acceptedTerms]`。配列を読み 2 要件を判定=L1 解決)。A-3 対象外 Visa の流用は
+`403 visa_dataset_mismatch`。Wallet 併記停止 (`LEGACY_SINGLE_CLAIMS=false`) 後も a3/台本5 が無回帰
+=公開基盤が `credentials[]` を実際に読んでいる確認 (C14 型サイレントギャップの解消)。passport 移行
+経路も同一挙動を維持。W-6 (hanako に資格 3 種) 確認済み。
+
 ## 既知の制約 / 本番移行時の課題
 
 README.rst「デモ簡略化」表のとおり。特に: Trust Chain/Trust Mark/DPoP は
