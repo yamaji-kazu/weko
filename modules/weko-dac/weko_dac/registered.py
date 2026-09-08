@@ -16,7 +16,7 @@ import uuid
 from flask import current_app, jsonify
 from invenio_db import db
 
-from . import allowlist, audit, services
+from . import allowlist, audit, presentation, services
 from .auth import (problem_title, problem_type, verify_jws,
                    verify_jws_with_keys)
 from .models import DacApplication, DacOffer
@@ -188,11 +188,43 @@ def unmet_requirements(offer_doc, visas, purpose):
     return unmet
 
 
-def grant_registered(dataset_id, passport_jwt, purpose,
-                     researcher_sub, agent_id, callback_url=None):
+def _visas_from_elements(elements, researcher_sub):
+    """提示物 (§11) の各要素の **原本 (raw)** を資格 Visa として検証し、
+    ``ga4gh_visa_v1`` オブジェクトの列を返す (分冊05 §11.3: 判定は原本から)。"""
+    verify_fn, method = _verifier()
+    visas = []
+    for el in elements:
+        fmt = el.get('credential_format') or 'ga4gh-visa+jwt'
+        if fmt != 'ga4gh-visa+jwt':
+            # デモの資格系は ga4gh-visa+jwt。他形式 (sd-jwt-vc/vc+jwt) は
+            # 検証器の形式分岐として後続段で対応する。
+            raise RegError(400, 'unsupported_presentation_type',
+                           'credential_format %s not yet supported' % fmt)
+        try:
+            vp = verify_fn(el['raw'])
+        except RegError:
+            raise
+        except Exception as ex:
+            raise RegError(403, 'invalid_passport',
+                           'inner credential not verifiable: %s' % ex)
+        if researcher_sub and vp.get('sub') \
+                and vp['sub'] != researcher_sub:
+            raise RegError(403, 'subject_mismatch',
+                           'inner credential sub does not match token sub')
+        v = vp.get('ga4gh_visa_v1')
+        if v:
+            visas.append(v)
+    return visas, 'presentation:' + method
+
+
+def grant_registered(dataset_id, researcher_sub, agent_id,
+                     presentation_jws=None, passport_jwt=None,
+                     intended_use=None, callback_url=None):
     """registered 資源への自動許諾 (§11.2)。
 
-    充足時: 即時自動承認の申請を1件作り、既存の許諾発行 (§6) を再利用して
+    入力は Credential Wallet の **提示物** (``presentation_jws``、v0.4)。移行期は
+    GA4GH Passport (``passport_jwt``) も受理し、監査に ``presentation_absent`` を
+    立てる。充足時: 即時自動承認の申請を1件作り、既存の許諾発行 (§6) を再利用して
     Agreement + Visa を発行・Wallet 格納し、callback を即時配送する。
     不充足時: RegError(403, requirements_not_met) を送出する。
     """
@@ -202,19 +234,36 @@ def grant_registered(dataset_id, passport_jwt, purpose,
                        'No policy registered for %s' % dataset_id)
     ac = offer_row.access_class
     if ac == 'controlled':
-        raise RegError(409, 'requires_review',
+        raise RegError(409, 'access_class_mismatch',
                        'controlled dataset; use POST /applications (§5.2)')
     if ac != 'registered':
-        raise RegError(409, 'not_registered',
+        raise RegError(409, 'access_class_mismatch',
                        'dataset accessClass is "%s", not "registered"' % ac)
     if allowlist.check_agent(agent_id or '') == 'denied':
         raise RegError(403, 'agent_not_allowlisted',
                        'agent %s is not in the static allowlist' % agent_id)
 
-    # Authentication + Attestation (§11.2.1)
-    visas, method = verify_passport_visas(passport_jwt, researcher_sub)
+    # Authentication + Attestation (§11.2.1 / §6.3 手順1〜3・5〜6)
+    if presentation_jws:
+        meta, elements = presentation.verify_presentation(
+            presentation_jws, expected_purpose='registered-access')
+        if researcher_sub and meta['sub'] and meta['sub'] != researcher_sub:
+            raise RegError(403, 'subject_mismatch',
+                           'presentation.sub != token.sub')
+        if meta['presented_by'] != agent_id:
+            raise RegError(403, 'agent_mismatch',
+                           'presented_by != token act.sub')
+        visas, method = _visas_from_elements(elements, researcher_sub)
+        presentation_absent = False
+    elif passport_jwt:
+        # 移行期: 生 Passport 入力 (分冊01 §11.2.2)
+        visas, method = verify_passport_visas(passport_jwt, researcher_sub)
+        presentation_absent = True
+    else:
+        raise RegError(400, 'presentation_required',
+                       'presentation (移行期は passport) が必要です')
     # Authorization (§12.2 決定的突合)
-    unmet = unmet_requirements(offer_row.offer, visas, purpose)
+    unmet = unmet_requirements(offer_row.offer, visas, intended_use)
     if unmet:
         audit.record('registered.denied',
                      subject={'dataset_id': dataset_id},
@@ -234,10 +283,11 @@ def grant_registered(dataset_id, passport_jwt, purpose,
         callback_url=callback_url,
         payload={'resource_type': 'dataset', 'access_route': 'registered',
                  'requests': [{'dataset_id': dataset_id,
-                               'purpose': purpose or {}}]},
+                               'intended_use': intended_use or {}}]},
         verification={'trust_chain': 'static_allowlist',
                       'access_route': 'registered',
                       'visa_method': method,
+                      'presentation_absent': presentation_absent,
                       'visa_types': [v.get('type') for v in visas],
                       'visa_sources': [v.get('source') for v in visas]})
     db.session.add(application)

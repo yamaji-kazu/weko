@@ -81,6 +81,9 @@ PROBLEM_TITLES = {
     'invalid_passport': 'パスポート／Visa を検証できません',
     'requires_review': '審査（controlled）が必要です',
     'not_registered': '登録（registered）区分ではありません',
+    'access_class_mismatch': 'アクセス区分が一致しません',
+    'purpose_not_permitted': '利用目的が許容範囲外です',
+    'issuer_not_authorized': '発行者に権限がありません',
     'requirements_not_met': '資格要件が未充足です',
 }
 

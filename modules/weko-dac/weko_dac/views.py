@@ -564,11 +564,19 @@ def registered_access():
         return _problem(400, 'missing_dataset_id',
                         'dataset_id required in the JSON body')
     _offer, dataset_id = _find_offer(raw)
+    # v0.4: 入力は Credential Wallet の提示物。移行期は passport も受理 (§11.2.2)。
+    # 利用目的は intended_use (旧名 purpose も移行期は受理)。
+    intended_use = body.get('intended_use')
+    if intended_use is None:
+        intended_use = body.get('purpose')
     try:
         _app, issued = registered.grant_registered(
-            dataset_id, body.get('passport') or '', body.get('purpose') or {},
-            g.dac_sub, g.dac_agent, callback_url=body.get('callback_url'))
-    except registered.RegError as err:
+            dataset_id, g.dac_sub, g.dac_agent,
+            presentation_jws=body.get('presentation'),
+            passport_jwt=body.get('passport'),
+            intended_use=intended_use or {},
+            callback_url=body.get('callback_url'))
+    except (registered.RegError, AuthError) as err:
         db.session.rollback()
         return err.as_response()
     agreement, visa = issued[0]
