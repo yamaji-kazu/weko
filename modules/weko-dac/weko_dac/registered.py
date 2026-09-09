@@ -11,6 +11,7 @@
 (§11.2.3)。open のみ許諾が存在しないため直接取得になる。
 """
 from datetime import datetime
+from urllib.parse import quote
 import uuid
 
 from flask import current_app, jsonify
@@ -143,12 +144,43 @@ def _duo_code_from_iri(iri):
     return tail if str(tail).startswith('DUO:') else None
 
 
-def unmet_requirements(offer_doc, visas, purpose):
+def _remediation_url(requirement, dataset_id):
+    """その要件を解消する手続きの入口 URL (分冊01 §5.8.3, SHOULD)。
+
+    ``WEKO_DAC_REMEDIATION_URLS`` (requirement→URL の dict) に設定がある要件だけ
+    付与する。dataset_id があれば ``?dataset=`` を付ける。未設定なら None (省略)。
+    """
+    mapping = current_app.config.get('WEKO_DAC_REMEDIATION_URLS') or {}
+    base = mapping.get(requirement)
+    if not base:
+        return None
+    if dataset_id:
+        sep = '&' if '?' in base else '?'
+        return '%s%sdataset=%s' % (base, sep, quote(dataset_id, safe=''))
+    return base
+
+
+def _unmet_entry(requirement, reason, detail, dataset_id):
+    """未充足要件の1件 (分冊01 §5.8.3)。
+
+    ``reason`` は閉じた語彙 (``absent`` / ``value-mismatch`` / ``invalid``) のみ。
+    人間向けの文言は ``detail`` に載せる (呼出側は未知メンバを無視する)。
+    ``remediation_url`` は設定がある場合のみ付く (SHOULD)。
+    """
+    entry = {'requirement': requirement, 'reason': reason, 'detail': detail}
+    url = _remediation_url(requirement, dataset_id)
+    if url:
+        entry['remediation_url'] = url
+    return entry
+
+
+def unmet_requirements(offer_doc, visas, purpose, dataset_id=None):
     """決定的ルール評価 (§11.2.1 / 分冊05 §12.2)。
 
     Offer の資格 constraint を要求者の Visa と突合し、**未充足の要件**を返す
     (空リスト = すべて充足)。判定不能は不充足として扱い、``needs_human`` は
-    生じない。LLM は使わない。
+    生じない。LLM は使わない。各要素は ``{requirement, reason, detail,
+    remediation_url?}`` (分冊01 §5.8.3、``reason`` は閉じた語彙)。
     """
     by_type = {}
     for v in visas:
@@ -165,26 +197,26 @@ def unmet_requirements(offer_doc, visas, purpose):
         if vtype:
             present = by_type.get(vtype) or []
             if not present:
-                unmet.append({'requirement': lo,
-                              'reason': '%s Visa がありません' % vtype})
+                unmet.append(_unmet_entry(
+                    lo, 'absent', '%s Visa がありません' % vtype, dataset_id))
                 continue
             if lo == 'rdc:acceptedTerms':
                 ro = c.get('rightOperand')
                 want = ro.get('@id') if isinstance(ro, dict) else ro
                 if want and not any(v.get('value') == want for v in present):
-                    unmet.append(
-                        {'requirement': lo,
-                         'reason': '指定の規約 (%s) への同意 Visa がありません'
-                         % want})
+                    unmet.append(_unmet_entry(
+                        lo, 'value-mismatch',
+                        '指定の規約 (%s) への同意 Visa がありません' % want,
+                        dataset_id))
         elif lo == 'purpose':
             ro = c.get('rightOperand') or {}
             iri = ro.get('@id') if isinstance(ro, dict) else ro
             code = _duo_code_from_iri(iri)
             if code and requested_duo and code not in requested_duo:
-                unmet.append(
-                    {'requirement': 'purpose',
-                     'reason': '要求 purpose が Offer の許容 (%s) に含まれません'
-                     % code})
+                unmet.append(_unmet_entry(
+                    'purpose', 'value-mismatch',
+                    '要求 purpose が Offer の許容 (%s) に含まれません' % code,
+                    dataset_id))
     return unmet
 
 
@@ -270,7 +302,8 @@ def grant_registered(dataset_id, researcher_sub, agent_id,
         presentation.check_issuer_authority(
             v.get('type'), v.get('source'), assigner)
     # Authorization (§12.2 決定的突合)
-    unmet = unmet_requirements(offer_row.offer, visas, intended_use)
+    unmet = unmet_requirements(offer_row.offer, visas, intended_use,
+                               dataset_id=dataset_id)
     if unmet:
         audit.record('registered.denied',
                      subject={'dataset_id': dataset_id},

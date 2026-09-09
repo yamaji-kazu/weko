@@ -59,6 +59,14 @@ WEKO_DAC_WALLET_DEPOSIT_RETRY_DELAY = float(
 WEKO_DAC_PROBLEM_TYPE_BASE = os.environ.get(
     'WEKO_DAC_PROBLEM_TYPE_BASE', 'https://rdc.nii.ac.jp/ns/problems')
 
+#: 未充足要件 (RDC-AAP-01 §5.8.3 unmet_requirements) の ``remediation_url``。
+#: requirement 識別子 → 手続きの入口 URL の dict。設定がある要件だけ応答に
+#: ``remediation_url`` が付く (SHOULD; 未設定なら省略で適合)。dataset_id は
+#: ``?dataset=`` として自動付与される。403 予備実演 (DEMO-04 2-2) 用の同意画面
+#: スタブなどを差す。例:
+#:   {'rdc:acceptedTerms': 'https://163.220.178.140/terms/agree'}
+WEKO_DAC_REMEDIATION_URLS = {}
+
 #: Estimated review period returned on application intake (ISO 8601).
 WEKO_DAC_ESTIMATED_REVIEW = 'P14D'
 
