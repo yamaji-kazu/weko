@@ -328,7 +328,9 @@ def grant_registered(dataset_id, researcher_sub, agent_id,
     services.transition(application, 'agreement_issued')
     for agreement, visa in issued:
         try:
-            services.deposit_visa_to_wallet(visa)
+            # 発行→即取得の台本のため、201 応答に wallet_credential_id を確実に
+            # 載せる短時間リトライ (恒久失敗は invenio dac pump が後追い再送)。
+            services.deposit_visa_to_wallet_retry(visa)
         except Exception:
             current_app.logger.exception(
                 'weko-dac: wallet deposit error (registered) for %s', visa.jti)

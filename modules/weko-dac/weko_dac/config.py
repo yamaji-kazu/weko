@@ -45,6 +45,14 @@ WEKO_DAC_ODRL_PROFILE = 'https://rdc.nii.ac.jp/ns/odrl-profile/v1'
 WEKO_DAC_ENFORCE_ISSUER_TRUST = os.environ.get(
     'WEKO_DAC_ENFORCE_ISSUER_TRUST', '').lower() in ('1', 'true', 'yes')
 
+#: registered 発行時の Wallet 同期預け入れ (§6.2) のインラインリトライ回数と間隔(秒)。
+#: 「発行→即取得」で 201 応答に wallet_credential_id を確実に載せるための短時間吸収。
+#: 恒久失敗は invenio dac pump が後追い再送する。
+WEKO_DAC_WALLET_DEPOSIT_ATTEMPTS = int(
+    os.environ.get('WEKO_DAC_WALLET_DEPOSIT_ATTEMPTS', '3'))
+WEKO_DAC_WALLET_DEPOSIT_RETRY_DELAY = float(
+    os.environ.get('WEKO_DAC_WALLET_DEPOSIT_RETRY_DELAY', '0.5'))
+
 #: RFC 9457 Problem Details ``type`` URI の基底 (RDC-AAP-01 §5.8.2)。
 #: type = ``<基底>/<コードのアンダースコアをハイフンに置換>`` で自動生成する。
 #: 例: requirements_not_met → https://rdc.nii.ac.jp/ns/problems/requirements-not-met

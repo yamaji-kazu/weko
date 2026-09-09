@@ -5,6 +5,7 @@ decisions, agreement/visa issuance, wallet deposit and callbacks."""
 import calendar
 import json
 import os
+import time
 import uuid
 from datetime import datetime, timedelta
 
@@ -546,6 +547,35 @@ def deposit_visa_to_wallet(visa):
         'weko-dac: wallet deposit failed (%s): %s',
         resp.status_code, resp.text[:500])
     return False
+
+
+def deposit_visa_to_wallet_retry(visa, attempts=None, delay=None):
+    """``deposit_visa_to_wallet`` を短時間リトライする。
+
+    registered の「発行→即取得」で 201 応答に ``wallet_credential_id`` を確実に
+    載せるため、container→Wallet(.141) の一時的な未達 (接続例外/5xx) を数回だけ
+    吸収する。恒久的な失敗は従来どおり ``invenio dac pump`` が後追いで再送する。
+    成功 (``wallet_credential_id`` が入った) 時点で打ち切る。
+    """
+    if attempts is None:
+        attempts = current_app.config.get('WEKO_DAC_WALLET_DEPOSIT_ATTEMPTS', 3)
+    if delay is None:
+        delay = current_app.config.get(
+            'WEKO_DAC_WALLET_DEPOSIT_RETRY_DELAY', 0.5)
+    attempts = max(1, int(attempts))
+    for i in range(attempts):
+        try:
+            if deposit_visa_to_wallet(visa) and visa.wallet_credential_id:
+                return True
+        except Exception:
+            current_app.logger.exception(
+                'weko-dac: wallet deposit attempt %d/%d failed for %s',
+                i + 1, attempts, visa.jti)
+        if visa.wallet_credential_id:
+            return True
+        if i + 1 < attempts:
+            time.sleep(delay)
+    return bool(visa.wallet_credential_id)
 
 
 def deliver_event(outbox_row):
