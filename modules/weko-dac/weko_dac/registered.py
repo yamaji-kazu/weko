@@ -326,6 +326,10 @@ def grant_registered(dataset_id, researcher_sub, agent_id,
     services.transition(application, 'approved')
     issued = services.issue_grants(application)
     services.transition(application, 'agreement_issued')
+    # visa.issued_at 等の Python 側デフォルト (default=_now) は flush 時に確定する。
+    # deposit の body は issued_at/expires_at を参照するため、預け入れ前に flush して
+    # おく (未 flush だと issued_at=None で strftime に失敗し同期預け入れが落ちる)。
+    db.session.flush()
     for agreement, visa in issued:
         try:
             # 発行→即取得の台本のため、201 応答に wallet_credential_id を確実に
