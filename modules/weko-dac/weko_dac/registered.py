@@ -174,13 +174,14 @@ def _unmet_entry(requirement, reason, detail, dataset_id):
     return entry
 
 
-def unmet_requirements(offer_doc, visas, purpose, dataset_id=None):
-    """決定的ルール評価 (§11.2.1 / 分冊05 §12.2)。
+def unmet_requirements(offer_doc, visas, dataset_id=None):
+    """決定的ルール評価 (§11.2.1 / 分冊05 §12.2) — 資格要件のみ。
 
-    Offer の資格 constraint を要求者の Visa と突合し、**未充足の要件**を返す
+    Offer の資格 constraint を要求者の Visa と突合し、**未充足の資格要件**を返す
     (空リスト = すべて充足)。判定不能は不充足として扱い、``needs_human`` は
     生じない。LLM は使わない。各要素は ``{requirement, reason, detail,
-    remediation_url?}`` (分冊01 §5.8.3、``reason`` は閉じた語彙)。
+    remediation_url?}`` (分冊01 §5.8.3、``requirement`` は資格語彙のみ・
+    ``reason`` は閉じた語彙)。利用目的の不適合は含めない (purpose_mismatch_code)。
     """
     by_type = {}
     for v in visas:
@@ -189,35 +190,54 @@ def unmet_requirements(offer_doc, visas, purpose, dataset_id=None):
     constraints = []
     for p in offer_doc.get('permission') or []:
         constraints.extend(p.get('constraint') or [])
-    requested_duo = set((purpose or {}).get('duo_codes') or [])
 
+    # 資格要件のみを評価する。要素の requirement は資格語彙
+    # (rdc:researcherStatus / rdc:affiliation / rdc:acceptedTerms) に限る
+    # (分冊01 §11.2.2)。利用目的の不適合はここに入れず purpose_mismatch_code()
+    # で別に判定し purpose_not_permitted (403) として返す。
     for c in constraints:
         lo = c.get('leftOperand')
         vtype = _REQ_TO_VISA.get(lo)
-        if vtype:
-            present = by_type.get(vtype) or []
-            if not present:
+        if not vtype:
+            continue
+        present = by_type.get(vtype) or []
+        if not present:
+            unmet.append(_unmet_entry(
+                lo, 'absent', '%s Visa がありません' % vtype, dataset_id))
+            continue
+        if lo == 'rdc:acceptedTerms':
+            ro = c.get('rightOperand')
+            want = ro.get('@id') if isinstance(ro, dict) else ro
+            if want and not any(v.get('value') == want for v in present):
                 unmet.append(_unmet_entry(
-                    lo, 'absent', '%s Visa がありません' % vtype, dataset_id))
+                    lo, 'value-mismatch',
+                    '指定の規約 (%s) への同意 Visa がありません' % want,
+                    dataset_id))
+    return unmet
+
+
+def purpose_mismatch_code(offer_doc, purpose):
+    """利用目的 (intended_use) が Offer の purpose 制約に適合しないとき、該当する
+    Offer 側 DUO コードを返す (適合/制約なしは None)。
+
+    判定条件は従来 (unmet_requirements 内) と同一。利用目的の不適合は資格要件とは
+    **別の失敗**であり、``requirements_not_met`` ではなく ``purpose_not_permitted``
+    (403) として返す (分冊01 §11.2.2)。研究者の対処が異なる — 資格不足は「取りに行く」、
+    目的不適合は「研究計画を話す」ため、混ぜてはならない。
+    """
+    requested_duo = set((purpose or {}).get('duo_codes') or [])
+    if not requested_duo:
+        return None
+    for p in offer_doc.get('permission') or []:
+        for c in p.get('constraint') or []:
+            if c.get('leftOperand') != 'purpose':
                 continue
-            if lo == 'rdc:acceptedTerms':
-                ro = c.get('rightOperand')
-                want = ro.get('@id') if isinstance(ro, dict) else ro
-                if want and not any(v.get('value') == want for v in present):
-                    unmet.append(_unmet_entry(
-                        lo, 'value-mismatch',
-                        '指定の規約 (%s) への同意 Visa がありません' % want,
-                        dataset_id))
-        elif lo == 'purpose':
             ro = c.get('rightOperand') or {}
             iri = ro.get('@id') if isinstance(ro, dict) else ro
             code = _duo_code_from_iri(iri)
-            if code and requested_duo and code not in requested_duo:
-                unmet.append(_unmet_entry(
-                    'purpose', 'value-mismatch',
-                    '要求 purpose が Offer の許容 (%s) に含まれません' % code,
-                    dataset_id))
-    return unmet
+            if code and code not in requested_duo:
+                return code
+    return None
 
 
 def _visas_from_elements(elements, researcher_sub):
@@ -301,9 +321,8 @@ def grant_registered(dataset_id, researcher_sub, agent_id,
     for v in visas:
         presentation.check_issuer_authority(
             v.get('type'), v.get('source'), assigner)
-    # Authorization (§12.2 決定的突合)
-    unmet = unmet_requirements(offer_row.offer, visas, intended_use,
-                               dataset_id=dataset_id)
+    # Authorization (§12.2 決定的突合) — 資格要件
+    unmet = unmet_requirements(offer_row.offer, visas, dataset_id=dataset_id)
     if unmet:
         audit.record('registered.denied',
                      subject={'dataset_id': dataset_id},
@@ -319,6 +338,24 @@ def grant_registered(dataset_id, researcher_sub, agent_id,
         db.session.commit()
         raise RegError(403, 'requirements_not_met',
                        '資格要件が満たされていません', unmet=unmet)
+
+    # 利用目的の適合 (§11.2.2) — 資格要件とは別。範囲外なら purpose_not_permitted。
+    bad_purpose = purpose_mismatch_code(offer_row.offer, intended_use)
+    if bad_purpose:
+        audit.record('registered.denied',
+                     subject={'dataset_id': dataset_id},
+                     actor={'kind': 'agent', 'id': agent_id,
+                            'on_behalf_of': researcher_sub},
+                     payload={'decision': 'denied', 'method': method,
+                              'access_class': 'registered',
+                              'reason': 'purpose_not_permitted',
+                              'offer_purpose': bad_purpose,
+                              'purpose': pres_purpose or 'registered-access',
+                              'intended_use': intended_use or {},
+                              'presentation_absent': presentation_absent})
+        db.session.commit()
+        raise RegError(403, 'purpose_not_permitted',
+                       '利用目的が Offer の許容範囲外です (%s)' % bad_purpose)
 
     application = DacApplication(
         application_id='app-{0}-{1}'.format(
