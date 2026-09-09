@@ -99,6 +99,10 @@ DRY_RUN=1 bash ~/wallet_cleanup.sh  # まず対象を確認
 bash ~/wallet_cleanup.sh            # 実行(dispose は本人トークンで)
 ```
 
+なお、署名を持たない初期シードのプレースホルダ 1 件(`wc-e1036eb7`、`ga4gh_visa_v1` 無し)は
+トラスト基盤が K-4 照合の際に破棄済み。放置すると強制切替え後に「原因不明の 403」として出る
+ものだったが、稽古前にウォレットから消えている。
+
 ---
 
 ## 2. 通し(3経路)
@@ -123,7 +127,40 @@ bash ~/wallet_cleanup.sh            # 実行(dispose は本人トークンで)
 - [ ] `chain_demo.sh` が **pump ブランチ無し**で PASS(`201` に `wallet_credential_id`)
 - [ ] `scene5_evidence.sh` が 監査3 / 許諾2 / 提示履歴3
 - [ ] `a3_visa_mismatch.sh` が `visa_dataset_mismatch`(異常系の芯)
-- [ ] (任意)K-4 強制の異常系を見せるなら:allowlist 反映済み + `WEKO_DAC_ENFORCE_ISSUER_TRUST=true` + restart で `issuer_not_authorized`(403)を1本
+- [ ] (任意)K-4 強制の異常系:§3.1 の手順で `issuer_not_authorized`(403)を1本
+
+### 3.1 K-4 強制の異常系(任意・稽古後)
+
+allowlist の `allowed_credential_types` は実測と一致確認済み(トラスト基盤 2026-09-09)。
+`https://163.220.178.141/visa-issuer`→資格3種、`https://163.220.178.140/dacs/rdc-dac-001`→
+`rdc:DataAccessGrant` の2エントリで通る。切替えは稽古後に WEKO 側で:
+
+```bash
+# WEKO VM
+export WEKO_DAC_ENFORCE_ISSUER_TRUST=true    # instance の env に設定
+docker restart weko-web-1
+```
+
+**弾いて見せる相手**:偽の発行者を仕立てる必要はない。ウォレットには台本5 の締め用の
+デモ小道具(`rdc:ComputeAllocation` 発行者 `https://hpci.example.jp`、`rdc:FacilityUseGrant`
+発行者 `https://facility.example-u.ac.jp` など)が入っており、**これらは allowlist に無い**
+(=公開基盤へは提示しない資産。足さないのが正しい)。この 1 件を提示に混ぜて公開基盤へ
+投げれば、`型の権限`(§3.2.1)で `403 issuer_not_authorized` が自然に出る。
+
+```bash
+# 例: hanako の ComputeAllocation(hpci)を提示に混ぜて registered-access に投げる
+CA=$(pick ComputeAllocation)   # ウォレットから hpci 発行のクレデンシャルを1件
+GP=$(curl -sk -X POST "$W/holders/$SUB/presentations" -H "Authorization: Bearer $DELEG" \
+  -H 'Content-Type: application/json' \
+  -d "{\"aud\":\"$PUB\",\"purpose\":\"registered-access\",\"credential_ids\":[\"$RS\",\"$AT\",\"$CA\"]}" | jget presentation)
+curl -sk -w '\nHTTP=%{http_code}\n' -X POST "$API/registered-access" \
+  -H "Authorization: Bearer $DELEG" -H 'Content-Type: application/json' \
+  -d "{\"dataset_id\":\"$DS_REG\",\"presentation\":\"$GP\",\"intended_use\":{\"duo_codes\":[\"DUO:0000042\"]}}"
+# 期待: 403 issuer_not_authorized(hpci.example.jp が allowlist の型権限を持たないため)
+```
+
+見せ終えたら、運用値に戻すか強制のまま進めるかを判断する(異常系デモの後は `false` に戻して
+稽古の他経路を汚さないのが無難)。
 
 **No-go 時の戻り先**:`000`→§1.2 DNAT。`201` が null→flush 修正の反映(§1.4)+`docker restart weko-web-1`。
 トークン空→export に実値(プレースホルダ厳禁)。
