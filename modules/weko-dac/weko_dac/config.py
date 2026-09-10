@@ -70,6 +70,13 @@ WEKO_DAC_REMEDIATION_URLS = {}
 #: Estimated review period returned on application intake (ISO 8601).
 WEKO_DAC_ESTIMATED_REVIEW = 'P14D'
 
+#: 一括ポリシー照会 (POST /policies) の 1 リクエスト上限件数と、応答の
+#: Cache-Control max-age(秒)。デモ02 で数十件の候補を会話中に繰り返し引くため。
+WEKO_DAC_POLICY_BATCH_LIMIT = int(
+    os.environ.get('WEKO_DAC_POLICY_BATCH_LIMIT', '100'))
+WEKO_DAC_POLICY_BATCH_MAXAGE = int(
+    os.environ.get('WEKO_DAC_POLICY_BATCH_MAXAGE', '60'))
+
 # --- OIDC verification (RDC-ATF Authorization Server) ---------------------
 # [DEMO] Bearer JWT from Keycloak realm `rdc` verified via JWKS.
 # Trust Chain resolution, Trust Mark status checks and DPoP proof

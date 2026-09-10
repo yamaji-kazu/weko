@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """REST API blueprints for weko-dac (RDC-AAP-01 §4–6)."""
 
+import hashlib
+import json
 import re
 import time
 from datetime import datetime
@@ -122,6 +124,90 @@ def get_policy_query():
         return _problem(400, 'missing_dataset_id',
                         'dataset_id query parameter required')
     return _policy_response(raw)
+
+
+def _iso8601_days(period):
+    """``P14D`` → 14。日数以外(P2Y 等)は概算せず 0 を返す(審査リードは日で表す)。"""
+    if not period:
+        return 0
+    m = re.match(r'^P(\d+)D$', str(period))
+    return int(m.group(1)) if m else 0
+
+
+def _policy_summary(row):
+    """バッチ用の要点だけ(Offer 全文ではない。RCOS demo02 §3.2 の 3)。
+
+    ``access_class`` / ``permitted_duo`` / ``key_duties`` / ``prohibitions`` /
+    ``max_duration`` / ``review_lead_time_days`` / ``assigner`` を返す。
+    値は登録時の ``template`` から引き、無い場合は Offer 本文/既定へフォールバックする。
+    """
+    tmpl = row.template or {}
+    offer = row.offer or {}
+    review_days = 0
+    if row.access_class == 'controlled':
+        review_days = _iso8601_days(
+            current_app.config.get('WEKO_DAC_ESTIMATED_REVIEW', 'P14D'))
+    return {
+        'access_class': row.access_class,
+        'permitted_duo': tmpl.get('duo_codes') or [],
+        'key_duties': tmpl.get('duties') or [],
+        'prohibitions': tmpl.get('prohibitions') or [],
+        'max_duration': tmpl.get('period'),
+        'review_lead_time_days': review_days,
+        'assigner': offer.get('assigner')
+        or current_app.config.get('WEKO_DAC_DAC_ID'),
+    }
+
+
+@blueprint_api.route('/policies', methods=['POST'])
+def get_policies_batch():
+    """一括ポリシー照会(認証不要、RCOS demo02 §3)。
+
+    ``POST {"dataset_ids": [...]}`` → ``{"results": [{dataset_id, status,
+    policy?}]}``。**要点は id ごとに status を分けること** — ``found`` /
+    ``not_found``(登録が無い)/ ``error``(引けなかった)。一部の失敗で全体を
+    4xx/5xx にしない(分冊03 §2-1: 「登録が無い」と「照会できなかった」を区別する)。
+    ETag / Cache-Control を付し、同じ候補群の再照会を軽くする。
+    """
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or not isinstance(body.get('dataset_ids'),
+                                                    list):
+        return _problem(400, 'invalid_request',
+                        'JSON body {"dataset_ids": [...]} required')
+    ids = body['dataset_ids']
+    limit = current_app.config.get('WEKO_DAC_POLICY_BATCH_LIMIT', 100)
+    if len(ids) > limit:
+        return _problem(400, 'too_many_dataset_ids',
+                        'at most %d dataset_ids per request' % limit)
+    results = []
+    for raw in ids:
+        if not isinstance(raw, str) or not raw:
+            results.append({'dataset_id': raw, 'status': 'error',
+                            'detail': 'dataset_id must be a non-empty string'})
+            continue
+        try:
+            row, _canonical = _find_offer(raw)
+            if row is None:
+                results.append({'dataset_id': raw, 'status': 'not_found'})
+            else:
+                results.append({'dataset_id': raw, 'status': 'found',
+                                'policy': _policy_summary(row)})
+        except Exception as ex:  # 1件の障害を全体に波及させない(§3.1)
+            current_app.logger.exception(
+                'weko-dac: policy batch error for %s', raw)
+            results.append({'dataset_id': raw, 'status': 'error',
+                            'detail': str(ex)[:200]})
+    payload = json.dumps({'results': results}, ensure_ascii=False,
+                         sort_keys=True).encode('utf-8')
+    etag = '"%s"' % hashlib.sha256(payload).hexdigest()[:32]
+    if request.headers.get('If-None-Match') == etag:
+        resp = Response(status=304)
+    else:
+        resp = Response(response=payload, mimetype='application/json')
+    resp.headers['ETag'] = etag
+    resp.headers['Cache-Control'] = 'public, max-age=%d' % \
+        current_app.config.get('WEKO_DAC_POLICY_BATCH_MAXAGE', 60)
+    return resp
 
 
 @blueprint_api.route('/visa-jwks.json', methods=['GET'])
