@@ -41,6 +41,12 @@ def pump():
     click.echo('expiry sweep done')
 
 
+# 「倫理審査の承認が必要」を明示する DUO コード (IRB)。permitted_duo に載せる
+# だけでは ODRL の制約に出ないため、demo-offer ではこのコードの有無から
+# ethics_required を立てて rdc:ethicsApproval 制約にも反映する。
+_IRB_DUO = 'DUO:0000021'
+
+
 @dac.command('demo-offer')
 @click.argument('dataset_id')
 @click.option('--duo', default='DUO:0000042', help='comma-separated codes')
@@ -52,18 +58,24 @@ def pump():
               help='sha256 hex; auto-computed from a local --file when omitted')
 @click.option('--terms', 'terms_opt', default=None,
               help='registered: accepted-terms URI (default WEKO_DAC_REGISTERED_TERMS_URI)')
+@click.option('--ethics', 'ethics_flag', is_flag=True, default=False,
+              help='require ethics approval; auto-enabled when --duo '
+                   'includes DUO:0000021 (IRB)')
 @with_appcontext
 def demo_offer(dataset_id, duo, period, access_class, file_path, checksum_opt,
-               terms_opt):
+               terms_opt, ethics_flag):
     """Register a demo ODRL Offer for DATASET_ID."""
     from .models import DacOffer
     from .services import offer_from_template
+    duo_codes = [c.strip() for c in duo.split(',') if c.strip()]
     template = {
         'access_class': access_class,
-        'duo_codes': [c.strip() for c in duo.split(',') if c.strip()],
+        'duo_codes': duo_codes,
         'period': period,
         'storage_class': 'rdc:certified-storage',
-        'ethics_required': False,
+        # 制約は署名対象で、DAR Agent が申請時に Offer を引き直して検証する
+        # 拠り所になる (分冊05 §3)。DUO 側と制約側の両方に出す。
+        'ethics_required': bool(ethics_flag) or (_IRB_DUO in duo_codes),
         'duties': ['rdc:cite', 'rdc:reportCompletion', 'rdc:deleteData'],
         'prohibitions': ['distribute', 'rdc:reIdentify'],
     }
