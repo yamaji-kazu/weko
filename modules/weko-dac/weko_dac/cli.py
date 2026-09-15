@@ -61,9 +61,12 @@ _IRB_DUO = 'DUO:0000021'
 @click.option('--ethics', 'ethics_flag', is_flag=True, default=False,
               help='require ethics approval; auto-enabled when --duo '
                    'includes DUO:0000021 (IRB)')
+@click.option('--license', 'license_opt', default=None,
+              help='license URI of the data (e.g. an SPDX URL). Omit when '
+                   'unknown - never guess; the key is then absent.')
 @with_appcontext
 def demo_offer(dataset_id, duo, period, access_class, file_path, checksum_opt,
-               terms_opt, ethics_flag):
+               terms_opt, ethics_flag, license_opt):
     """Register a demo ODRL Offer for DATASET_ID."""
     from .models import DacOffer
     from .services import offer_from_template
@@ -76,6 +79,8 @@ def demo_offer(dataset_id, duo, period, access_class, file_path, checksum_opt,
         # 制約は署名対象で、DAR Agent が申請時に Offer を引き直して検証する
         # 拠り所になる (分冊05 §3)。DUO 側と制約側の両方に出す。
         'ethics_required': bool(ethics_flag) or (_IRB_DUO in duo_codes),
+        # 不明なら None のまま → Offer に rdc:license を出さない
+        'license': (license_opt or '').strip() or None,
         'duties': ['rdc:cite', 'rdc:reportCompletion', 'rdc:deleteData'],
         'prohibitions': ['distribute', 'rdc:reIdentify'],
     }

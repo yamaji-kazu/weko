@@ -47,7 +47,7 @@ def offer_from_template(dataset_id, template):
 
     Template keys: access_class, duo_codes[], period (xsd:duration or
     date), storage_class, ethics_required, duties[], prohibitions[],
-    spatial.
+    spatial, license.
     """
     profile = current_app.config['WEKO_DAC_ODRL_PROFILE']
     constraints = []
@@ -81,7 +81,7 @@ def offer_from_template(dataset_id, template):
     duties = [{'action': d} for d in (template.get('duties') or [])]
     prohibitions = [{'action': p}
                     for p in (template.get('prohibitions') or [])]
-    return {
+    offer = {
         '@context': ['http://www.w3.org/ns/odrl.jsonld', profile],
         '@type': 'Offer',
         'uid': '{0}/policies/off-{1}'.format(
@@ -97,6 +97,12 @@ def offer_from_template(dataset_id, template):
         }],
         'prohibition': prohibitions,
     }
+    # 再利用データのライセンス。分かっているときだけ載せる — 不明を
+    # CC-BY 等で埋めない (DR 2026-09-16 §3: 計画書/maDMP に根拠のない
+    # 値を残さない)。値が無ければキーごと出さない。
+    if template.get('license'):
+        offer['rdc:license'] = {'@id': template['license']}
+    return offer
 
 
 # --------------------------------------------------------------------------
