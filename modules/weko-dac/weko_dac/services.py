@@ -468,10 +468,20 @@ def issue_grants(application, conditions=None):
         db.session.add(visa)
         audit.record('agreement.issued',
                      subject={'application_id': application.application_id,
+                              'dataset_id': dataset_id,
                               'agreement_uid': agreement_doc['uid']},
                      actor={'kind': 'service',
                             'id': current_app.config['WEKO_DAC_DAC_ID']},
-                     payload_digest=audit.digest(agreement_doc))
+                     payload={'agreement_digest': audit.digest(agreement_doc),
+                              'offer_access_class': offer_row.access_class,
+                              'offer_updated_at': (
+                                  offer_row.updated_at.isoformat()
+                                  if offer_row.updated_at else None),
+                              'requirements_checked': [
+                                  c.get('leftOperand')
+                                  for p in (offer_row.offer.get(
+                                      'permission') or [])
+                                  for c in (p.get('constraint') or [])]})
         audit.record('visa.issued',
                      subject={'application_id': application.application_id,
                               'jti': jti},
