@@ -217,17 +217,28 @@ def unmet_requirements(offer_doc, visas, dataset_id=None):
 
 
 def purpose_mismatch_code(offer_doc, purpose):
-    """利用目的 (intended_use) が Offer の purpose 制約に適合しないとき、該当する
-    Offer 側 DUO コードを返す (適合/制約なしは None)。
+    """利用目的 (intended_use) が Offer の purpose 制約に適合しないとき、Offer 側が
+    **許可している** DUO コードの一例を返す (適合/制約なしは None)。
 
-    判定条件は従来 (unmet_requirements 内) と同一。利用目的の不適合は資格要件とは
-    **別の失敗**であり、``requirements_not_met`` ではなく ``purpose_not_permitted``
-    (403) として返す (分冊01 §11.2.2)。研究者の対処が異なる — 資格不足は「取りに行く」、
-    目的不適合は「研究計画を話す」ため、混ぜてはならない。
+    Offer の ``purpose`` 制約は**許可された目的の一覧**であり、申請側が宣言した目的
+    (``intended_use.duo_codes``) が**そのいずれかに該当すれば適合**とする。
+
+    以前は向きが逆で、**Offer の全コードを申請側が宣言していること**を求めていた。
+    そのため一次許可と修飾子が並ぶ Offer (例: GRU + NPOA + NMDS) は、申請側が GRU を
+    正しく宣言しても NPOA で落ち、**原理的に適合しなかった** (DG 2026-09-16 の実測)。
+    修飾子は申請側が目的として宣言するものではないため、全宣言を求める形は成立しない。
+
+    包含関係 (例: GRU ⊇ HMB、NRES ⊇ 任意) はまだ見ておらず、判定は完全一致である。
+    どの包含を認めるかは分冊05 の決定待ち (DG §4.1)。
+
+    利用目的の不適合は資格要件とは**別の失敗**であり、``requirements_not_met`` では
+    なく ``purpose_not_permitted`` (403) として返す (分冊01 §11.2.2)。研究者の対処が
+    異なる — 資格不足は「取りに行く」、目的不適合は「研究計画を話す」ため、混ぜない。
     """
     requested_duo = set((purpose or {}).get('duo_codes') or [])
     if not requested_duo:
         return None
+    permitted = []
     for p in offer_doc.get('permission') or []:
         for c in p.get('constraint') or []:
             if c.get('leftOperand') != 'purpose':
@@ -235,9 +246,13 @@ def purpose_mismatch_code(offer_doc, purpose):
             ro = c.get('rightOperand') or {}
             iri = ro.get('@id') if isinstance(ro, dict) else ro
             code = _duo_code_from_iri(iri)
-            if code and code not in requested_duo:
-                return code
-    return None
+            if code:
+                permitted.append(code)
+    if not permitted:
+        return None            # purpose 制約なし = 目的を問わない
+    if requested_duo.intersection(permitted):
+        return None            # 宣言した目的が許可された目的に含まれる
+    return permitted[0]        # 不適合 — 許可されている目的の一例を返す
 
 
 def _visas_from_elements(elements, researcher_sub):
