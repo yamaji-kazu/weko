@@ -164,8 +164,11 @@ class DacApplicationView(_OfficerView):
 class DacOfferView(_OfficerView):
     """ODRL Offer management via condition templates (§4.1)."""
 
-    _DUTY_CHOICES = ['rdc:cite', 'rdc:reportCompletion', 'rdc:deleteData',
-                     'rdc:registerOutcome']
+    # rdc:noReIdentify は分冊05 §2.5 の義務語彙 (禁止 rdc:reIdentify を受諾した
+    # ことの表明)。demo-offer は registered の Offer に出しているのに選択肢が
+    # 無く、管理画面から同じ Offer を再現できなかった (v0.4.8 §2.1 と同型の穴)。
+    _DUTY_CHOICES = ['rdc:cite', 'rdc:noReIdentify', 'rdc:reportCompletion',
+                     'rdc:deleteData', 'rdc:registerOutcome']
     _PROHIBITION_CHOICES = ['distribute', 'derive', 'rdc:reIdentify']
 
     @expose('/', methods=['GET'])
