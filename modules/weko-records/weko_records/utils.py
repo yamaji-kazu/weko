@@ -919,6 +919,50 @@ def get_options_and_order_list(item_type_id, item_type_data=None):
     return solst, meta_options
 
 
+def _item_type_view_structures(item_type_id, item_type_data=None):
+    """アイテムタイプから導く、一覧表示用の構造 (要求の間だけ覚える).
+
+    返すのは (item_type, solst, meta_options, hide_list, item_map)。同じ要求の中で
+    同じアイテムタイプなら 2 度目以降は覚えたものを返す。読むだけの構造なので
+    hit 間で共有してよい (書き換える呼び出しは無い)。app context が無ければ
+    覚えず、毎回作る。
+    """
+    from weko_items_ui.utils import get_hide_list_by_schema_form
+
+    from weko_records.serializers.utils import get_mapping
+
+    cache = None
+    try:
+        from flask import g
+        cache = getattr(g, "_weko_item_type_view_structures", None)
+        if cache is None:
+            cache = {}
+            setattr(g, "_weko_item_type_view_structures", cache)
+    except RuntimeError:
+        cache = None
+    key = str(item_type_id)
+    if cache is not None and key in cache:
+        return cache[key]
+
+    if item_type_data is not None and getattr(item_type_data, "model", None) is not None:
+        item_type = item_type_data.model
+    else:
+        item_type = ItemTypes.get_by_id(item_type_id)
+    hide_list = []
+    if item_type:
+        solst, meta_options = get_options_and_order_list(
+            item_type_id, item_type_data=ItemTypes(item_type.schema, model=item_type))
+        hide_list = get_hide_list_by_schema_form(
+            schemaform=item_type.render.get('table_row_map', {}).get('form', []))
+    else:
+        solst, meta_options = get_options_and_order_list(item_type_id)
+    item_map = get_mapping(item_type_id, "jpcoar_mapping", item_type=item_type)
+    result = (item_type, solst, meta_options, hide_list, item_map)
+    if cache is not None:
+        cache[key] = result
+    return result
+
+
 async def sort_meta_data_by_options(
     record_hit,
     settings,
@@ -1542,17 +1586,16 @@ async def sort_meta_data_by_options(
         )
 
         # selected title
-        from weko_items_ui.utils import get_hide_list_by_schema_form
-
-        item_type = ItemTypes.get_by_id(item_type_id)
-        hide_list = []
-        if item_type:
-            solst, meta_options = get_options_and_order_list(
-                item_type_id, item_type_data=ItemTypes(item_type.schema, model=item_type))
-            hide_list = get_hide_list_by_schema_form(schemaform=item_type.render.get('table_row_map', {}).get('form', []))
-        else:
-            solst, meta_options = get_options_and_order_list(item_type_id)
-        item_map = get_mapping(item_type_id, "jpcoar_mapping", item_type=item_type)
+        #
+        # アイテムタイプから導く構造 (solst / meta_options / hide_list / item_map) は
+        # **同じ要求の中で hit ごとに作り直さない。** 検索結果 112 件は同じアイテム
+        # タイプなのに、hit ごとに ItemTypes.get_by_id と Mapping.get_record を引き、
+        # 巨大な JSON を 1 件ごとに復号していた (2026-09-17 のプロファイル: 112 件で
+        # 15.5 秒のうち 9.9 秒がここ。うち DB 6.5 秒、JSON 復号 3.9 秒)。呼び出し側は
+        # アイテムタイプを一度だけ引いて item_type_data で渡してくるので、それを
+        # 使い、導いた構造は要求の間だけ覚える。
+        item_type, solst, meta_options, hide_list, item_map = \
+            _item_type_view_structures(item_type_id, item_type_data)
         title_value_key = 'title.@value'
         title_lang_key = 'title.@attributes.xml:lang'
         title_languages = []

@@ -666,13 +666,41 @@ class ItemTypes(RecordBase):
 
         Returns:
             ItemType: Item type model instance.
+
+        読むだけの要求 (GET) の間は、同じ id の結果を覚えて 2 度目以降は DB を
+        引かない。検索結果の整形は hit ごと・ファイルごとにアイテムタイプを引き、
+        1 件あたり数十 KB の JSON を復号していた (2026-09-17 のプロファイル)。
+        書き込みを伴う要求では覚えない — 同じ要求の中で更新した直後に古いものを
+        返さないため。
         """
+        memo = cls._request_memo()
+        key = (id_, bool(with_deleted))
+        if memo is not None and key in memo:
+            return memo[key]
         with db.session.no_autoflush:
             query = ItemType.query.filter_by(id=id_)
             if not with_deleted:
                 query = query.filter(ItemType.is_deleted.is_(False))  # noqa
             obj = query.one_or_none()
-        return obj if isinstance(obj, ItemType) else None
+        result = obj if isinstance(obj, ItemType) else None
+        if memo is not None:
+            memo[key] = result
+        return result
+
+    @staticmethod
+    def _request_memo():
+        """GET 要求の間だけ有効な覚え書き (無ければ None)."""
+        try:
+            from flask import g, request
+            if request.method != 'GET':
+                return None
+            memo = getattr(g, '_weko_item_type_memo', None)
+            if memo is None:
+                memo = {}
+                setattr(g, '_weko_item_type_memo', memo)
+            return memo
+        except RuntimeError:
+            return None
 
     @classmethod
     def get_by_name(cls, name_, with_deleted=False):

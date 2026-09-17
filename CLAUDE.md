@@ -74,7 +74,11 @@ CLAUDE.md の #3) — 同じ形を作らない。
 
 このブランチが上流に対して触っているのは `modules/weko-dac` のほか、`modules/weko-accounts`
 (Shibboleth ログインの 2 ファイル)、`nginx/`、`scripts/entrypoint_*.sh`、`scripts/instance.cfg`、
-`docker-compose2.yml`、`conf/allowlist.json`、`tls/`。**それ以外の上流モジュールは触らない。**
+`docker-compose2.yml`、`conf/allowlist.json`、`tls/`、そして検索応答の速さのために
+`modules/weko-records` (`utils.py` / `api.py`) と `modules/invenio-records-rest`
+(`serializers/json.py`) — いずれも hit ごとにアイテムタイプを引き直していたのを要求の
+間だけ覚える変更で、応答は 112 件で byte 単位に同一 (2026-09-17)。**それ以外の上流
+モジュールは触らない。**
 WEKO 本体を直す必要が出たら、weko-dac 側で吸収できないかを先に考える。
 
 ## コミット

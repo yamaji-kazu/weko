@@ -80,23 +80,50 @@ class JSONSerializerMixin(SerializerMixinInterface):
                     del_hide_sub_metadata(keys[1:] if len(
                         keys) > 1 else keys, metadata[index])
 
+        # アイテムタイプから導くもの (アイテムタイプ本体・隠す項目の一覧) は、
+        # **この応答の中で hit ごとに引き直さない。** 112 件が同じアイテムタイプでも
+        # hit ごとに ItemTypes.get_by_id / get_record と Mapping を引き、巨大な JSON を
+        # 復号していた (2026-09-17 のプロファイル: 112 件で 6.7 秒のうち約 6 秒)。
+        # 隠す項目の一覧はアイテムタイプだけで決まる (hit に依らない) ので共有できる。
+        item_types_by_id = {}
+        hidden_by_type = {}
+
+        def _item_type_of(item_type_id):
+            key = str(item_type_id)
+            if key not in item_types_by_id:
+                item_types_by_id[key] = ItemTypes.get_by_id(item_type_id)
+            return item_types_by_id[key]
+
+        def _hidden_of(item_type_id, item_type):
+            key = str(item_type_id)
+            if key not in hidden_by_type:
+                list_hidden = []
+                list_hidden_mapping = []
+                if item_type:
+                    list_hidden = get_ignore_item(
+                        item_type_id,
+                        item_type_data=ItemTypes(item_type.schema, model=item_type))
+                    list_hidden_mapping = get_ignore_item_from_mapping(item_type_id, item_type)
+                hidden_by_type[key] = (list_hidden, list_hidden_mapping)
+            return hidden_by_type[key]
+
         for hit in search_result['hits']['hits']:
             if '_source' in hit and '_item_metadata' in hit['_source']:
-                hit['_source']['_item_metadata'] = hide_by_email(hit['_source']['_item_metadata'], True)
-                
+                _md_type_id = hit['_source']['_item_metadata'].get('item_type_id')
+                hit['_source']['_item_metadata'] = hide_by_email(
+                    hit['_source']['_item_metadata'], True,
+                    item_type=_item_type_of(_md_type_id) if _md_type_id else None)
+
                 item_roles = {
                     'weko_creator_id': hit['_source'].get('weko_creator_id'),
                     'weko_shared_ids': hit['_source'].get('weko_shared_ids', [])
                 }
                 if hide_meta_data_for_role(item_roles) and 'item_type_id' in hit['_source']['_item_metadata']:
                     item_type_id = hit['_source']['_item_metadata']['item_type_id']
-                    item_type = ItemTypes.get_by_id(item_type_id)
-                    list_hidden = []
-                    list_hidden_mapping = []
+                    item_type = _item_type_of(item_type_id)
+                    list_hidden, list_hidden_mapping = _hidden_of(item_type_id, item_type)
                     if item_type:
-                        list_hidden = get_ignore_item(item_type_id, item_type_data=ItemTypes(item_type.schema, model=item_type))
                         hit['_source']['_item_metadata'] = hide_by_itemtype(hit['_source']['_item_metadata'], list_hidden)
-                        list_hidden_mapping = get_ignore_item_from_mapping(item_type_id, item_type)
                     for hide_key in list_hidden_mapping:
                         if isinstance(hide_key, str) \
                                 and hit['_source'].get(hide_key):
