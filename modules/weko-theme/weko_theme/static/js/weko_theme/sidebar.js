@@ -105,7 +105,14 @@ document.addEventListener('DOMContentLoaded', function() {
   if (resizer && row) {
     const WIDTH_KEY = 'weko.sidebar.width';
     const MIN = 160;
-    const maxWidth = () => Math.max(MIN, Math.floor(row.getBoundingClientRect().width * 0.6));
+    // 行の幅で上限を決めるが、読み込み直後はウィジェットの配置が終わるまで行が
+    // 隠れていて幅が 0 になる (実測)。0 のときは行ではなく画面の幅で見る —
+    // そうしないと覚えた幅が下限 160px に潰される
+    const rowWidth = () => {
+      const w = row.getBoundingClientRect().width;
+      return w > 0 ? w : window.innerWidth;
+    };
+    const maxWidth = () => Math.max(MIN, Math.floor(rowWidth() * 0.6));
     const applyWidth = (px) => {
       if (px == null) {
         row.style.removeProperty('--weko-sidebar-width');
@@ -114,10 +121,13 @@ document.addEventListener('DOMContentLoaded', function() {
       const w = Math.min(maxWidth(), Math.max(MIN, Math.round(px)));
       row.style.setProperty('--weko-sidebar-width', w + 'px');
     };
-    try {
-      const saved = parseInt(localStorage.getItem(WIDTH_KEY), 10);
-      if (saved > 0) applyWidth(saved);
-    } catch (_) {}
+    // 既定の幅。Bootstrap の col-3 (25%) は狭い (2026-09-17 の指摘) ので、覚えた幅が
+    // 無ければ 340px (行の 4 割まで) を使う。ダブルクリックで戻るのもこの幅
+    const DEFAULT = 340;
+    const defaultWidth = () => Math.min(DEFAULT, Math.floor(rowWidth() * 0.4));
+    let saved = 0;
+    try { saved = parseInt(localStorage.getItem(WIDTH_KEY), 10) || 0; } catch (_) {}
+    applyWidth(saved > 0 ? saved : defaultWidth());
 
     let startX = 0, startW = 0, dragging = false;
     const onMove = (ev) => {
@@ -157,8 +167,13 @@ document.addEventListener('DOMContentLoaded', function() {
     resizer.addEventListener('mousedown', onDown);
     resizer.addEventListener('touchstart', onDown, { passive: false });
     resizer.addEventListener('dblclick', () => {
-      applyWidth(null);
+      applyWidth(defaultWidth());
       try { localStorage.removeItem(WIDTH_KEY); } catch (_) {}
+    });
+    // 画面の幅が変わったら上限に収め直す (覚えた幅はそのまま)
+    window.addEventListener('resize', () => {
+      const v = parseInt(row.style.getPropertyValue('--weko-sidebar-width'), 10);
+      if (v > 0) applyWidth(v);
     });
   }
 });
