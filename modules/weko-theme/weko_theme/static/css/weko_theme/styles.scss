@@ -363,6 +363,10 @@ ng\:form {
 }
 #fixed_header > form.navbar-form2 {
     margin-left: 6px;
+    // Log in の右端を、下の本文の箱 (タブのパネル) の右端に合わせる (2026-09-17)。
+    // navbar-right の負の余白 (-15px) で画面の右端 (1265px) まで出ていたのを、
+    // 容器の内側 (1250px) からパネルの余白 3px ぶん戻して 1247px に揃える
+    margin-right: 3px !important;
 }
 #fixed_header .navbar-form2 > .login-button {
     display: inline-flex;
