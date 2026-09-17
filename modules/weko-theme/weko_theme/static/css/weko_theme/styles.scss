@@ -352,14 +352,47 @@ ng\:form {
     height: auto !important;
 }
 
+// 右上の Language と Log in の縦位置を揃える (2026-09-17)。
+// 2 つの form は float で上端に並び、Log in (31px) と Language (26px) の高さが
+// 違うので中心がずれていた。両方を同じ高さの箱にして中身を中央に置き、
+// 部品の高さ (ボタン・セレクト) も 28px に揃える
+#fixed_header > .navbar-form2 {
+    display: flex;
+    align-items: center;
+    height: 32px;
+}
+#fixed_header > form.navbar-form2 {
+    margin-left: 6px;
+}
+#fixed_header .navbar-form2 > .login-button {
+    display: inline-flex;
+    align-items: center;
+    height: 28px !important;
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: 1;
+}
+#fixed_header .navbar-form2 > .login-button > .fa {
+    margin-right: 4px;
+}
+#fixed_header .form-group2 {
+    display: flex;
+    align-items: center;
+}
+#fixed_header .form-group2 > span[for="lang-code"] {
+    margin-right: 6px;
+    line-height: 1;
+}
+
 // language selector
 .form-group2 {
     height: auto !important;
     font-size: 12px !important;
 }
 .form-group2 > .form-control {
-    height: auto !important;
+    height: 28px !important;
     font-size: 12px !important;
+    line-height: 18px;
     padding-left: 10px;
     padding-right: 10px;
     padding-top: 4px;
