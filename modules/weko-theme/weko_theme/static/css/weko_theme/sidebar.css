@@ -54,6 +54,54 @@
   }
 
 
+/* 左のインデックスツリーは、中身が少なくても右の本文と同じ高さにする (2026-09-17)。
+ * 行 (#search_row) は flex で左右の列を同じ高さに伸ばしているが、列の中の
+ * パネルは中身の高さで止まっていた。列 → パネル → 本文 → 木のパネル → 木の本文、
+ * と縦の flex でつないで、木の本文が残りの高さを埋める (中身が多ければそこで
+ * スクロール)。管理画面で決めた木の高さ (.index-body の height) は、伸ばす方の
+ * 下限としてだけ効く。 */
+@media (min-width: 768px) {
+  #search_sidebar_container {
+    display: flex;
+    flex-direction: column;
+    height: auto !important;
+  }
+  #search_sidebar_container > .panel {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  #search_sidebar {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  #body_index {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  #body_index > .scroll {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  #body_index > .scroll > .panel {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+  }
+  #body_index > .scroll > .panel > .index-body {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  /* 折りたたみ時は中身を出さないので伸ばさない */
+  #search_sidebar_container.sidebar-collapsed {
+    display: block;
+  }
+}
+
 @media (max-width: 767.98px) {
   /* 行は縦積み */
   #search_row {
