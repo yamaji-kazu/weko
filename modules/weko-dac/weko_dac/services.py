@@ -3,6 +3,7 @@
 decisions, agreement/visa issuance, wallet deposit and callbacks."""
 
 import calendar
+import hashlib
 import json
 import os
 import time
@@ -40,6 +41,20 @@ class IntakeError(Exception):
 # --------------------------------------------------------------------------
 
 _DUO_IRI = 'http://purl.obolibrary.org/obo/DUO_{0}'
+
+
+def offer_fingerprint(offer_doc):
+    """Offer の**版の指紋** (ATF-07 §5.1.2 / §5.4)。
+
+    demo-offer は upsert で履歴を持たず、``updated_at`` だけでは「その時刻に何が
+    書いてあったか」を引き当てられない。内容そのもののハッシュなら、DR が Policy
+    応答から取った値と、公開基盤が許諾時に記録した値を**同じ式**で突き合わせられる。
+    単件の ``GET /policy`` の ``ETag``、バッチの ``policy.offer_fingerprint``、
+    監査 ``agreement.issued`` の ``offer_fingerprint`` はすべてこの値。
+    """
+    payload = json.dumps(offer_doc or {}, sort_keys=True, ensure_ascii=False,
+                         separators=(',', ':')).encode('utf-8')
+    return hashlib.sha256(payload).hexdigest()[:32]
 
 
 def offer_from_template(dataset_id, template):
@@ -477,6 +492,10 @@ def issue_grants(application, conditions=None):
                               'offer_updated_at': (
                                   offer_row.updated_at.isoformat()
                                   if offer_row.updated_at else None),
+                              # 版の指紋 (ATF-07 §5.4)。DR が §5.1 に残す値と
+                              # 同じ式 (offer_fingerprint) で突き合わせる
+                              'offer_fingerprint': offer_fingerprint(
+                                  offer_row.offer),
                               'requirements_checked': [
                                   c.get('leftOperand')
                                   for p in (offer_row.offer.get(

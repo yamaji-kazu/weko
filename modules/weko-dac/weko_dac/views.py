@@ -100,9 +100,20 @@ def _policy_response(raw):
     if row is None:
         return _problem(404, 'unknown_dataset',
                         'No policy registered for %s' % canonical)
-    return Response(
-        response=jsonify(row.offer).get_data(),
-        mimetype='application/odrl+json')
+    # 版の指紋 (ATF-07 §5.1.2)。バッチ応答の ETag は候補群全体のハッシュで
+    # Offer 1 件の版にはならないので、単件は Offer 本文のハッシュを返す。
+    # 同じ値をバッチの policy.offer_fingerprint と agreement.issued に出す
+    etag = '"%s"' % services.offer_fingerprint(row.offer)
+    if request.headers.get('If-None-Match') == etag:
+        resp = Response(status=304)
+    else:
+        resp = Response(response=jsonify(row.offer).get_data(),
+                        mimetype='application/odrl+json')
+    resp.headers['ETag'] = etag
+    if row.updated_at:
+        resp.headers['Last-Modified'] = row.updated_at.strftime(
+            '%a, %d %b %Y %H:%M:%S GMT')
+    return resp
 
 
 @blueprint_api.route('/datasets/<path:dataset_id>/policy',
@@ -156,6 +167,12 @@ def _policy_summary(row):
         'review_lead_time_days': review_days,
         'assigner': offer.get('assigner')
         or current_app.config.get('WEKO_DAC_DAC_ID'),
+        # 突き合わせの鍵と版の指紋 (ATF-07 §5.1.2)。DR はこれを候補ごとの
+        # 記録に残し、公開基盤は agreement.issued に同じ値を残す
+        'odrl_offer_uid': offer.get('uid'),
+        'offer_fingerprint': services.offer_fingerprint(offer),
+        'offer_updated_at': (row.updated_at.isoformat()
+                             if row.updated_at else None),
     }
 
 
