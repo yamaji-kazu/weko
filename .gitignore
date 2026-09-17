@@ -106,3 +106,4 @@ inbox/
 ui-tests/test-results/
 nginx/keys/server.key
 .env
+.env.bak*
