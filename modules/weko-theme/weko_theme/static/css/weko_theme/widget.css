@@ -184,18 +184,57 @@
   position: fixed;
 }
 
+/* 読み込み中の見た目 (2026-09-17)。
+ * 以前は 20vh の大きな輪が画面中央に出て、同時に上の進行線と左上の小さな輪も
+ * 出ていた (3 つの表示が同時に動く)。進みは上の細い線だけで示し、中央の輪は
+ * 小さく細くして、0.3 秒より早く終わる読み込みでは出さない (出た瞬間に消える
+ * 輪はちらつきにしか見えない)。 */
 .lds-ring {
   position: fixed;
-  height: 20vh;
-  width: 20vh;
+  height: 28px;
+  width: 28px;
   z-index: 1001;
-  right: calc(50% - 10vh);
-  top: 40vh;
-  border: 5px solid rgba(0, 0, 0, 0.2);
-  border-top-color: rgba(0, 174, 239, 0.8);
+  right: calc(50% - 14px);
+  top: calc(50vh - 14px);
+  border: 2px solid rgba(0, 0, 0, 0.08);
+  border-top-color: #00aeef;
   border-radius: 100%;
-  animation: rotation 1.5s infinite linear 0.25s;
-  opacity: 1;
+  opacity: 0;
+  animation: rotation 0.8s infinite linear 0.3s, lds-appear 0.25s ease-out 0.3s forwards;
+}
+
+@keyframes lds-appear {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* angular-loading-bar: 左上の小さな輪は出さない。線は WEKO の色で少し太く、光る先端は消す */
+#loading-bar-spinner {
+  display: none !important;
+}
+#loading-bar .bar {
+  background: #00aeef !important;
+  height: 3px !important;
+}
+#loading-bar .peg {
+  display: none !important;
+}
+
+/* 一覧の「Loading...」: アイコンフォントの代わりに小さな輪を添える */
+.invenio-search-loading .loading {
+  color: #8a8f94;
+  font-size: 13px;
+}
+.invenio-search-loading .loading .fa-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-top-color: #00aeef;
+  border-radius: 50%;
+  animation: rotation 0.8s infinite linear;
 }
 
 .widgetIE{
@@ -224,11 +263,9 @@
 
 @keyframes rotation {
   from {
-    opacity: 1;
     transform: rotate(0deg);
   }
   to {
-    opacity: 1;
     transform: rotate(359deg);
   }
 }

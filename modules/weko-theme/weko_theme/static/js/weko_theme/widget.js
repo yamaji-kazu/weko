@@ -1112,8 +1112,10 @@ function toggleWidgetUI() {
     $('footer-fix#footer').remove();
     setTimeout(function () {
       // Remove page loading.
+      // 500ms 待っていたが、ウィジェットは既に描かれている。白い覆いを長く
+      // 見せる理由が無いので短くする (2026-09-17)
       $(".lds-ring-background").addClass("hidden");
-    }, 500);
+    }, 120);
     window.removeEventListener("focus", toggleWidgetUI);
 }
 
