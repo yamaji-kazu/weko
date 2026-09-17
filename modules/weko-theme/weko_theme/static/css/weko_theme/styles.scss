@@ -305,6 +305,7 @@ ng\:form {
 .panel-default-2 > .panel-heading .breadcrumb > li {
   padding: 0 0 0 16px !important;
   font-size: 16px !important;
+  line-height: 1.1;          // panel-title と同じ行高にして、左のツリーの見出しと高さを揃える
   text-indent: 0 !important;
   list-style: none !important;
 }

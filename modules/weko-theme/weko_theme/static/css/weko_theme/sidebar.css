@@ -21,7 +21,7 @@
   }
   #sidebar-toggle {
     position: absolute;
-    top: 6px;
+    top: 9px;
     right: 22px;
     z-index: 3;
     width: 22px;
@@ -131,15 +131,23 @@
     flex-direction: column;
     height: auto !important;
   }
+  /* 外側のパネルは枠にしない — 中の「Index Tree」のパネルの上端を、右の
+     「Index List」のパネルの上端と同じ高さにするため (2026-09-17)。外側の枠と
+     本文の余白 (15px) のぶん、左だけ下がっていた */
   #search_sidebar_container > .panel {
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    margin-bottom: 0;
   }
   #search_sidebar {
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
+    padding-top: 0;
   }
   #body_index {
     flex: 1 1 auto;
@@ -155,7 +163,7 @@
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
-    margin-bottom: 0;
+    margin-bottom: 20px;   /* 右の列の最後のパネルと同じ下余白 */
   }
   #body_index > .scroll > .panel > .index-body {
     flex: 1 1 auto;
