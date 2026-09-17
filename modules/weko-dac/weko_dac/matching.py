@@ -48,6 +48,78 @@ def duo_subsumes(offer_code, request_code):
     return False
 
 
+# DUO のコードは 2 層ある (分冊05 §12.2.2)。一次許可 (GRU / HMB / DS …) は
+# 「どの範囲の研究目的に許すか」で、申請側が宣言する。修飾子 (NPUNCU / NMDS /
+# IRB …) は「どう使ってはならないか」で、申請側は宣言しない。同じ purpose の
+# 配列に並んでいても、可否に用いるのは一次許可だけである。
+DUO_MODIFIER_ROOT = 'DUO:0000017'
+
+
+def duo_is_modifier(code):
+    """True if ``code`` is a data use modifier (under DUO:0000017)."""
+    return bool(code) and duo_subsumes(DUO_MODIFIER_ROOT, code)
+
+
+def duo_known(code):
+    """True if the snapshot says anything about ``code``."""
+    return code in DUO_SNAPSHOT.get('labels', {}) or \
+        code in DUO_SNAPSHOT.get('parents', {})
+
+
+def purpose_verdict(offer_codes, request_codes):
+    """§12.2.2: is every requested purpose inside the Offer's permitted set?
+
+    ``offer_codes`` are the DUO codes listed under the Offer's ``purpose``
+    constraints (normalized, may mix a primary permission with modifiers);
+    ``request_codes`` are the codes the applicant declared as its purpose.
+
+    Returns a dict: ``permitted`` (bool), ``primary`` (the Offer's primary
+    permission, or None when the Offer does not constrain the purpose),
+    ``modifiers`` (Offer codes not used for the verdict), ``requested``,
+    ``rejected`` (request codes outside the permitted set) and ``detail``.
+
+    The permitted set is the transitive closure of the snapshot under the
+    primary code, so the verdict is a membership test, not inference. A
+    request code the snapshot does not know is outside every set. The
+    spec allows one primary per Offer; if an Offer nevertheless lists
+    several, a request code may fall under any of them (demo-offer never
+    produces such an Offer).
+    """
+    primaries = []
+    modifiers = []
+    for code in offer_codes or []:
+        if not code:
+            continue
+        if duo_is_modifier(code):
+            modifiers.append(code)
+        else:
+            primaries.append(code)
+    requested = [c for c in (request_codes or []) if c]
+    # 申請側が修飾子を混ぜてきても目的としては扱わない (宣言するものではない)
+    declared = [c for c in requested if not duo_is_modifier(c)]
+    version = DUO_SNAPSHOT.get('version')
+    if not primaries:
+        return {'permitted': True, 'primary': None, 'modifiers': modifiers,
+                'requested': requested, 'rejected': [],
+                'detail': 'offer does not constrain the purpose'}
+    if not declared:
+        return {'permitted': False, 'primary': primaries[0],
+                'modifiers': modifiers, 'requested': requested,
+                'rejected': [],
+                'detail': 'no primary purpose declared in the request'}
+    rejected = [c for c in declared
+                if not any(duo_subsumes(p, c) for p in primaries)]
+    if rejected:
+        detail = '%s not in the permitted set of %s (DUO %s)' % (
+            ', '.join(rejected), ', '.join(primaries), version)
+    else:
+        detail = '%s ⊑ %s (DUO %s)' % (
+            ', '.join(declared), ', '.join(primaries), version)
+    return {'permitted': not rejected, 'primary': primaries[0],
+            'modifiers': modifiers, 'requested': requested,
+            'rejected': rejected, 'detail': detail}
+
+
 def _operand_value(operand):
     """Extract a plain value from an ODRL rightOperand."""
     if isinstance(operand, dict):
@@ -112,21 +184,24 @@ def evaluate_constraint(offer_c, request_perm, period_start=None):
     offer_val = _operand_value(offer_c.get('rightOperand'))
     req_c = _find_constraint(request_perm.get('constraint'), left)
 
-    # purpose (DUO subsumption)
+    # purpose (DUO: membership in the permitted set, §12.2.2)
     if short == 'purpose':
         offer_duo = normalize_duo(offer_c.get('rightOperand'))
+        if offer_duo and duo_is_modifier(offer_duo):
+            # 修飾子は可否に用いない。Agreement に転記して取得後に効く条件と
+            # して扱う (§12.2.2 移行規則)。無かったことにはしないので報告には残す
+            return _judge('satisfied',
+                          '%s is a data use modifier: not used for the '
+                          'verdict, carried over to the Agreement (§12.2.2)'
+                          % offer_duo)
         if req_c is None:
             return _judge('not_satisfied', 'purpose missing in Request')
         req_duo = normalize_duo(req_c.get('rightOperand'))
         if not offer_duo or not req_duo:
             return _judge('needs_human', 'non-DUO purpose value')
-        if duo_subsumes(offer_duo, req_duo):
-            return _judge('satisfied',
-                          '%s ⊑ %s (DUO %s)' % (
-                              req_duo, offer_duo,
-                              DUO_SNAPSHOT.get('version')))
-        return _judge('not_satisfied',
-                      '%s is not subsumed by %s' % (req_duo, offer_duo))
+        verdict = purpose_verdict([offer_duo], [req_duo])
+        return _judge('satisfied' if verdict['permitted'] else 'not_satisfied',
+                      verdict['detail'])
 
     # dateTime (period comparison)
     if short == 'dateTime':

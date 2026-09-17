@@ -2,7 +2,7 @@
 
 - 対象: WEKO フォーク (yamaji-kazu/weko) への追加開発一式
 - 仕様: aifs リポジトリ `docs/rdc-aap/` (RDC-AAP-00〜05) および `docs/demo/` (DEMO-10/11/20/21/24)
-- 最終更新: 2026-09-03
+- 最終更新: 2026-09-17
 
 開発は以下の順で行われた。各段の詳細は該当ドキュメント・コミットを参照。
 
@@ -230,6 +230,26 @@ Grant Wallet を Credential Wallet に一般化した v0.4 に追従。提示物
 `403 visa_dataset_mismatch`。Wallet 併記停止 (`LEGACY_SINGLE_CLAIMS=false`) 後も a3/台本5 が無回帰
 =公開基盤が `credentials[]` を実際に読んでいる確認 (C14 型サイレントギャップの解消)。passport 移行
 経路も同一挙動を維持。W-6 (hanako に資格 3 種) 確認済み。
+
+## 12. purpose の照合を許容集合への所属判定にする (2026-09-17, 分冊05 §12.2.2 / rdc-aap-v0.4.9 決定 1)
+
+`registered.py` の `purpose_mismatch_code()` は完全一致だった。GRU (あらゆる研究目的) を
+許す Offer に HMB を宣言すると `403 purpose_not_permitted` になり、DR の実測では
+`registered` 40 件のうち **0 件**が通らない状態だった (DR 2026-09-16)。DG は 9/17 に
+「研究計画の問題ではない」と言い分ける説明 (`duo-subsumption.ts`) を持たざるを得なかった。
+
+- `data/duo_snapshot.json` (`demo-2026-09`): 修飾子の根 `DUO:0000017` を足し、NPUNCU /
+  NMDS / IRB / NPOA / NCU をその下に置く。**一次許可と修飾子の区別は配布された表から引く**
+  (推論しない)。表に無い申請側コードは不充足、表に無い Offer 側コードは自分自身だけを許す
+- `matching.purpose_verdict()`: Offer の `purpose` を一次許可と修飾子に分け、申請側の
+  一次許可がすべて一次許可の閉包に入れば適合。修飾子は可否に用いず、報告には残す
+  (§12.2.2 移行規則「転記は必ず行う」)。`evaluate_constraint` (controlled の審査支援) も
+  同じ規則 — 以前は DS+IRB の Offer で IRB の行が `not_satisfied` になり、DS の申請が
+  原理的に通らなかった
+- `registered.purpose_verdict()` が上を呼ぶ。監査 `registered.denied` に `rejected_purpose`
+  と `duo_snapshot` の版を記録する (§8「審査時に使用した版を証跡へ」)
+- `tests/test_purpose_matching.py`: Flask なしで走る 18 件。通るもの 7 / 拒否 7 / 評価器 4。
+  変異 (修飾子の概念を消す / 完全一致に戻す / 全許可) で 6 / 11 / 11 件が落ちることを確認
 
 ## 既知の制約 / 本番移行時の課題
 

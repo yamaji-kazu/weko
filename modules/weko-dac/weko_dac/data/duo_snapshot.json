@@ -1,23 +1,32 @@
 {
-  "version": "demo-2026-08",
-  "comment": "DUO subsumption snapshot (Policy Registry distributed; spec vol.05 §8/§10). parent maps child DUO code -> parent DUO code. A request code satisfies an offer code when it equals the offer code or is a (transitive) descendant of it.",
+  "version": "demo-2026-09",
+  "comment": "DUO snapshot (Policy Registry distributed; spec vol.05 §8/§12.2.2). parents maps child DUO code -> parent DUO code. A request code is permitted by an offer's primary permission when it equals that code or is a (transitive) descendant of it. Codes under DUO:0000017 are data use modifiers: never matched as a purpose, carried over to the Agreement. Codes absent from this table are unknown: an unknown request code is not permitted; an unknown offer code only permits itself.",
   "labels": {
     "DUO:0000001": "data use permission",
     "DUO:0000004": "no restriction (NRES)",
-    "DUO:0000042": "general research use (GRU)",
     "DUO:0000006": "health or medical or biomedical research (HMB)",
     "DUO:0000007": "disease specific research (DS)",
     "DUO:0000011": "population origins or ancestry research only (POA)",
+    "DUO:0000015": "no general methods research (NMDS)",
     "DUO:0000016": "genetic studies only (GSO)",
+    "DUO:0000017": "data use modifier",
     "DUO:0000018": "not for profit, non commercial use only (NPUNCU)",
+    "DUO:0000021": "ethics approval required (IRB)",
+    "DUO:0000042": "general research use (GRU)",
+    "DUO:0000044": "population origins or ancestry research prohibited (NPOA)",
     "DUO:0000046": "non-commercial use only (NCU)"
   },
   "parents": {
     "DUO:0000004": "DUO:0000001",
-    "DUO:0000042": "DUO:0000004",
     "DUO:0000006": "DUO:0000042",
     "DUO:0000007": "DUO:0000006",
     "DUO:0000011": "DUO:0000042",
-    "DUO:0000016": "DUO:0000042"
+    "DUO:0000015": "DUO:0000017",
+    "DUO:0000016": "DUO:0000042",
+    "DUO:0000018": "DUO:0000017",
+    "DUO:0000021": "DUO:0000017",
+    "DUO:0000042": "DUO:0000004",
+    "DUO:0000044": "DUO:0000017",
+    "DUO:0000046": "DUO:0000017"
   }
 }

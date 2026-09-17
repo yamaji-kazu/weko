@@ -17,7 +17,7 @@ import uuid
 from flask import current_app, jsonify
 from invenio_db import db
 
-from . import allowlist, audit, presentation, services
+from . import allowlist, audit, matching, presentation, services
 from .auth import (problem_title, problem_type, verify_jws,
                    verify_jws_with_keys)
 from .models import DacApplication, DacOffer
@@ -216,29 +216,9 @@ def unmet_requirements(offer_doc, visas, dataset_id=None):
     return unmet
 
 
-def purpose_mismatch_code(offer_doc, purpose):
-    """利用目的 (intended_use) が Offer の purpose 制約に適合しないとき、Offer 側が
-    **許可している** DUO コードの一例を返す (適合/制約なしは None)。
-
-    Offer の ``purpose`` 制約は**許可された目的の一覧**であり、申請側が宣言した目的
-    (``intended_use.duo_codes``) が**そのいずれかに該当すれば適合**とする。
-
-    以前は向きが逆で、**Offer の全コードを申請側が宣言していること**を求めていた。
-    そのため一次許可と修飾子が並ぶ Offer (例: GRU + NPOA + NMDS) は、申請側が GRU を
-    正しく宣言しても NPOA で落ち、**原理的に適合しなかった** (DG 2026-09-16 の実測)。
-    修飾子は申請側が目的として宣言するものではないため、全宣言を求める形は成立しない。
-
-    包含関係 (例: GRU ⊇ HMB、NRES ⊇ 任意) はまだ見ておらず、判定は完全一致である。
-    どの包含を認めるかは分冊05 の決定待ち (DG §4.1)。
-
-    利用目的の不適合は資格要件とは**別の失敗**であり、``requirements_not_met`` では
-    なく ``purpose_not_permitted`` (403) として返す (分冊01 §11.2.2)。研究者の対処が
-    異なる — 資格不足は「取りに行く」、目的不適合は「研究計画を話す」ため、混ぜない。
-    """
-    requested_duo = set((purpose or {}).get('duo_codes') or [])
-    if not requested_duo:
-        return None
-    permitted = []
+def offer_purpose_codes(offer_doc):
+    """Offer の ``purpose`` 制約に並ぶ DUO コード (正規化済み) を列挙する。"""
+    codes = []
     for p in offer_doc.get('permission') or []:
         for c in p.get('constraint') or []:
             if c.get('leftOperand') != 'purpose':
@@ -247,12 +227,41 @@ def purpose_mismatch_code(offer_doc, purpose):
             iri = ro.get('@id') if isinstance(ro, dict) else ro
             code = _duo_code_from_iri(iri)
             if code:
-                permitted.append(code)
-    if not permitted:
-        return None            # purpose 制約なし = 目的を問わない
-    if requested_duo.intersection(permitted):
-        return None            # 宣言した目的が許可された目的に含まれる
-    return permitted[0]        # 不適合 — 許可されている目的の一例を返す
+                codes.append(code)
+    return codes
+
+
+def purpose_verdict(offer_doc, purpose):
+    """利用目的 (intended_use) を Offer の一次許可の許容集合と突き合わせる
+    (分冊05 §12.2.2)。``matching.purpose_verdict`` の結果をそのまま返す。
+
+    Offer の ``purpose`` には一次許可 (GRU / HMB / DS …) と修飾子 (NPUNCU / NMDS /
+    IRB …) が同じ配列に並ぶ。**可否に用いるのは一次許可だけ**で、申請側の目的が
+    その許容集合 (配布された DUO スナップショットの閉包) に含まれれば適合。
+    GRU の Offer は HMB や DS の目的を通す。修飾子は取得後に効く条件として
+    Agreement に転記するもので、目的として照合しない。
+
+    以前は完全一致だった。GRU を許す Offer に HMB を宣言すると落ち、DG は
+    「研究計画の問題ではない」と言い分ける説明を持たざるを得なかった
+    (DG a2351ba、2026-09-17)。決定 1 (rdc-aap-v0.4.9) がこれを所属判定と定めた。
+    """
+    requested = list((purpose or {}).get('duo_codes') or [])
+    if not requested:
+        return None            # 目的の宣言なし = 従来どおり問わない
+    return matching.purpose_verdict(offer_purpose_codes(offer_doc), requested)
+
+
+def purpose_mismatch_code(offer_doc, purpose):
+    """不適合のとき Offer の一次許可コードを返す (適合/制約なしは None)。
+
+    利用目的の不適合は資格要件とは**別の失敗**であり、``requirements_not_met`` では
+    なく ``purpose_not_permitted`` (403) として返す (分冊01 §11.2.2)。研究者の対処が
+    異なる — 資格不足は「取りに行く」、目的不適合は「研究計画を話す」ため、混ぜない。
+    """
+    verdict = purpose_verdict(offer_doc, purpose)
+    if verdict is None or verdict['permitted']:
+        return None
+    return verdict['primary']
 
 
 def _visas_from_elements(elements, researcher_sub):
@@ -355,8 +364,8 @@ def grant_registered(dataset_id, researcher_sub, agent_id,
                        '資格要件が満たされていません', unmet=unmet)
 
     # 利用目的の適合 (§11.2.2) — 資格要件とは別。範囲外なら purpose_not_permitted。
-    bad_purpose = purpose_mismatch_code(offer_row.offer, intended_use)
-    if bad_purpose:
+    verdict = purpose_verdict(offer_row.offer, intended_use)
+    if verdict is not None and not verdict['permitted']:
         audit.record('registered.denied',
                      subject={'dataset_id': dataset_id},
                      actor={'kind': 'agent', 'id': agent_id,
@@ -364,13 +373,17 @@ def grant_registered(dataset_id, researcher_sub, agent_id,
                      payload={'decision': 'denied', 'method': method,
                               'access_class': 'registered',
                               'reason': 'purpose_not_permitted',
-                              'offer_purpose': bad_purpose,
+                              'offer_purpose': verdict['primary'],
+                              'rejected_purpose': verdict['rejected'],
+                              'duo_snapshot': matching.DUO_SNAPSHOT.get(
+                                  'version'),
                               'purpose': pres_purpose or 'registered-access',
                               'intended_use': intended_use or {},
                               'presentation_absent': presentation_absent})
         db.session.commit()
         raise RegError(403, 'purpose_not_permitted',
-                       '利用目的が Offer の許容範囲外です (%s)' % bad_purpose)
+                       '利用目的が Offer の許容範囲外です (%s)'
+                       % verdict['primary'])
 
     application = DacApplication(
         application_id='app-{0}-{1}'.format(
