@@ -96,4 +96,69 @@ document.addEventListener('DOMContentLoaded', function() {
     const expanded = btn.getAttribute('aria-expanded') !== 'false';
     updateButtonText(expanded);
   });
+
+  // ---- 幅の変更 (2026-09-17) ----
+  // 列の右縁をつまんで横に動かす。決めた幅は --weko-sidebar-width として行に
+  // 置き、CSS が Bootstrap の col-* より優先する。ダブルクリックで既定に戻る。
+  const resizer = document.getElementById('sidebar-resizer');
+  const row = document.getElementById('search_row');
+  if (resizer && row) {
+    const WIDTH_KEY = 'weko.sidebar.width';
+    const MIN = 160;
+    const maxWidth = () => Math.max(MIN, Math.floor(row.getBoundingClientRect().width * 0.6));
+    const applyWidth = (px) => {
+      if (px == null) {
+        row.style.removeProperty('--weko-sidebar-width');
+        return;
+      }
+      const w = Math.min(maxWidth(), Math.max(MIN, Math.round(px)));
+      row.style.setProperty('--weko-sidebar-width', w + 'px');
+    };
+    try {
+      const saved = parseInt(localStorage.getItem(WIDTH_KEY), 10);
+      if (saved > 0) applyWidth(saved);
+    } catch (_) {}
+
+    let startX = 0, startW = 0, dragging = false;
+    const onMove = (ev) => {
+      if (!dragging) return;
+      const x = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      applyWidth(startW + (x - startX));
+      ev.preventDefault();
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      resizer.classList.remove('is-dragging');
+      document.body.classList.remove('sidebar-resizing');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+      const v = row.style.getPropertyValue('--weko-sidebar-width');
+      try {
+        if (v) localStorage.setItem(WIDTH_KEY, String(parseInt(v, 10)));
+        else localStorage.removeItem(WIDTH_KEY);
+      } catch (_) {}
+    };
+    const onDown = (ev) => {
+      if (sidebar.classList.contains('sidebar-collapsed')) return;
+      dragging = true;
+      startX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      startW = sidebar.getBoundingClientRect().width;
+      resizer.classList.add('is-dragging');
+      document.body.classList.add('sidebar-resizing');
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onUp);
+      ev.preventDefault();
+    };
+    resizer.addEventListener('mousedown', onDown);
+    resizer.addEventListener('touchstart', onDown, { passive: false });
+    resizer.addEventListener('dblclick', () => {
+      applyWidth(null);
+      try { localStorage.removeItem(WIDTH_KEY); } catch (_) {}
+    });
+  }
 });

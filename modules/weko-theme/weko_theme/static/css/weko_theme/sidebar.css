@@ -14,20 +14,85 @@
     flex: 0 0 50px;
   }
 
+  /* 折りたたみの矢印: 右上に小さく。触れると濃くなる (2026-09-17。以前は
+     「Minimize menu」の帯がパネルの上に一段あった) */
+  #search_sidebar_container {
+    position: relative;
+  }
   #sidebar-toggle {
+    position: absolute;
+    top: 6px;
+    right: 22px;
+    z-index: 3;
+    width: 22px;
+    height: 22px;
     border: none;
+    border-radius: 3px;
     background: transparent;
     padding: 0;
+    color: #b0b6bb;
+    line-height: 22px;
+    text-align: center;
+    cursor: pointer;
+    transition: color .15s ease, background-color .15s ease;
   }
-
+  #sidebar-toggle:hover,
+  #sidebar-toggle:focus {
+    color: #333;
+    background-color: rgba(0, 0, 0, 0.05);
+    outline: none;
+  }
   #sidebar-toggle::before {
-    content: "\25C0";
-    font-size: 0.875em;
+    content: "\2039";   /* ‹ */
+    font-size: 18px;
     display: inline-block;
+    line-height: 1;
+    vertical-align: -1px;
+  }
+  .sidebar-collapsed #sidebar-toggle {
+    right: 14px;
+  }
+  .sidebar-collapsed #sidebar-toggle::before {
+    content: "\203A";   /* › */
+  }
+  /* 木のパネルの見出しの右端を矢印のぶん空ける */
+  #body_index > .scroll > .panel > .panel-heading {
+    padding-right: 36px;
   }
 
-  .sidebar-collapsed #sidebar-toggle::before {
-    content: "\25B6";
+  /* 幅の変更: 列の右縁の細い帯をつまむ */
+  .sidebar-resizer {
+    position: absolute;
+    top: 0;
+    bottom: 20px;
+    right: 4px;
+    width: 8px;
+    cursor: col-resize;
+    z-index: 3;
+    border-radius: 4px;
+    background: transparent;
+    transition: background-color .15s ease;
+  }
+  .sidebar-resizer:hover,
+  .sidebar-resizer.is-dragging {
+    background-color: rgba(0, 174, 239, 0.25);
+  }
+  body.sidebar-resizing {
+    cursor: col-resize;
+    user-select: none;
+  }
+  .sidebar-collapsed .sidebar-resizer {
+    display: none;
+  }
+  /* つまんで決めた幅 (--weko-sidebar-width) があれば、Bootstrap の col-* より優先 */
+  #search_row[style*="--weko-sidebar-width"] > #search_sidebar_container:not(.sidebar-collapsed) {
+    flex: 0 0 var(--weko-sidebar-width);
+    width: var(--weko-sidebar-width) !important;
+    max-width: none;
+  }
+  #search_row[style*="--weko-sidebar-width"] > #item-main.main-expanded {
+    flex: 1 1 auto;
+    width: auto !important;
   }
 
   #search_sidebar {
@@ -113,6 +178,10 @@
     width: 100% !important;
     min-width: 0;
     flex: none; /* flex制御は不要 */
+  }
+
+  .sidebar-resizer {
+    display: none;
   }
 
   /* 折りたたみ時でも横幅100%（ボタン行のみ表示） */

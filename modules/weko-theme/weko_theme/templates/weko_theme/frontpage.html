@@ -27,7 +27,7 @@
   {% assets "invenio_search_ui_search_css" %}<link href="{{ ASSET_URL }}" rel="stylesheet">{% endassets %}
   {% assets "weko_search_ui_css" %}<link href="{{ ASSET_URL }}" rel="stylesheet">{% endassets %}
   {#- 名前に版が無いファイルはブラウザが 1 日覚える (nginx) ので、変えたら v を上げる #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/weko_theme/sidebar.css', v='20260917') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/weko_theme/sidebar.css', v='20260917b') }}">
 {%- endblock css %}
 
 {%- block javascript %}
@@ -39,7 +39,7 @@
   {% assets "weko_search_ui_dependencies_js" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
   {% assets "weko_search_ui_js" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
   {% assets "weko_theme_js_widget" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
-  <script src="{{ url_for('static', filename='js/weko_theme/sidebar.js')}}"></script>
+  <script src="{{ url_for('static', filename='js/weko_theme/sidebar.js', v='20260917b') }}"></script>
 {%- endblock javascript %}
 
 {%- block page_body_tabs %}

@@ -285,6 +285,45 @@ ng\:form {
 
 .panel-default-2{ margin-bottom: 2px;}
 
+// Index List のパネル (indexlist.html) の余白を詰める (2026-09-17)。
+// 見出しの li が padding 10px + 18px、本文が padding 15px の上に、空の
+// breadcrumb・空の <p> (margin 10px)・空の list-group (margin 20px) が並び、
+// 何も無いのに 100px 近い白い空間ができていた。中身があるときは通常どおり出る。
+// 見出しの「Index List」とインデックス名を 1 行に並べる
+.panel-default-2 > .panel-heading .panel-title {
+  display: inline-block;
+  margin-right: 14px;
+  vertical-align: middle;
+}
+.panel-default-2 > .panel-heading .breadcrumb {
+  display: inline-block;
+  vertical-align: middle;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent;
+}
+.panel-default-2 > .panel-heading .breadcrumb > li {
+  padding: 0 0 0 16px !important;
+  font-size: 16px !important;
+  text-indent: 0 !important;
+  list-style: none !important;
+}
+.panel-default-2 > .panel-heading .breadcrumb > li + li::before {
+  content: "/";
+  padding: 0 6px 0 0;
+  color: #ccc;
+}
+.panel-default-2 > .panel-body {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+// 空の説明 (<span> の中の block <p>) が匿名の行箱を作って 40px 取っていた
+.panel-default-2 #index_tree_img > .col-xs-6 > span { display: block; }
+.panel-default-2 #index_tree_img p { margin: 0; }
+.panel-default-2 #index_tree_list { padding-top: 0 !important; }
+.panel-default-2 #index_tree_list .list-group { margin-bottom: 0; }
+.panel-default-2 #index_tree_list .list-group-item { padding: 6px 12px; }
+
 .panel-body2 {padding: 2px 2px;}
 
 .well2 {margin-bottom: 0px;}
