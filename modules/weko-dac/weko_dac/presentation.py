@@ -173,10 +173,13 @@ def verify_presentation(presentation, expected_purpose=None):
         raise AuthError(403, 'agent_not_allowlisted',
                         'presented_by %s is not in the static allowlist'
                         % presented_by)
-    # 用途 (§11.1 purpose)。呼出側が用途を指定した場合は一致必須
+    # 用途 (§11.1 purpose)。呼出側が用途を指定した場合は一致必須。
+    # 不一致は presentation-purpose-mismatch (401) — 提示物が別の行為のために発行されて
+    # いたことを表す発行時束縛の逸脱であり (§6.3 手順1)、purpose-not-permitted (403、目的
+    # そのものが許されない) とは別。呼出側は前者なら提示を取り直せばよい (分冊01 §5.8.1)。
     purpose = payload.get('purpose')
     if expected_purpose is not None and purpose != expected_purpose:
-        raise AuthError(400, 'invalid_presentation',
+        raise AuthError(401, 'presentation_purpose_mismatch',
                         'presentation purpose %r != expected %r'
                         % (purpose, expected_purpose))
     elements = _elements_from_payload(payload)

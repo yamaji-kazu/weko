@@ -152,11 +152,20 @@ def test_forged_receipt_rejected():
 
 
 def test_hdc_not_yet_verifiable():
-    """hdc (本人署名) は Stage B。検証基盤が無いうちは fail-closed で 401。"""
+    """hdc (本人署名) は Stage B。未対応として fail-closed で 401。
+    「不正 (invalid_presentation)」ではなく「未対応 (delegation_type_unsupported)」に分ける。"""
     with pytest.raises(AuthError) as ei:
         _run(_payload('hdc', raw='x'), _elements(['rdc:ResearcherStatus']), _meta())
     assert ei.value.status == 401
-    assert ei.value.code == 'invalid_presentation'
+    assert ei.value.code == 'delegation_type_unsupported'
+
+
+def test_unknown_delegation_type_rejected():
+    """未知の委任種別も未対応として 401 delegation_type_unsupported。"""
+    with pytest.raises(AuthError) as ei:
+        _run(_payload('sd-jwt-vc'), _elements(['rdc:ResearcherStatus']), _meta())
+    assert ei.value.status == 401
+    assert ei.value.code == 'delegation_type_unsupported'
 
 
 def test_receipt_subject_mismatch_rejected():

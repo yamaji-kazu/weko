@@ -91,11 +91,15 @@ def verify_delegation(payload, elements, meta):
                                 % err.detail)
             raise
     elif dtype == 'hdc':
-        # Stage B。本人鍵の検証基盤が無いうちは実在を確かめられない → fail-closed。
-        raise AuthError(401, 'invalid_presentation',
-                        'delegation type "hdc" is not yet verifiable (Stage B)')
+        # Stage B。本人鍵 (holder) の検証基盤がこの Stage A 検証者には無いため、hdc の
+        # 実在は確かめられない → fail-closed。ただしこれは提示物が「不正」なのではなく、
+        # この検証者が当該委任種別に「未対応」であることを表す (§5.8.4)。混同しないよう
+        # invalid_presentation とは別コードにする。
+        raise AuthError(401, 'delegation_type_unsupported',
+                        'delegation type "hdc" (holder-signed) is not verifiable by this '
+                        'Stage A verifier; holder-key verification arrives in Stage B')
     elif dtype not in (None, 'oauth-act'):
-        raise AuthError(401, 'invalid_presentation',
+        raise AuthError(401, 'delegation_type_unsupported',
                         'unknown delegation type %r' % dtype)
     # oauth-act は自己申告 (裏づけの署名なし)。実在は確かめられないが、範囲は確かめる。
 
