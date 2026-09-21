@@ -18,7 +18,7 @@ import time
 import jwt as pyjwt
 from flask import current_app
 
-from . import allowlist
+from . import allowlist, delegation
 from .auth import AuthError, jwk_to_public_key, verify_jws
 from .models import DacPresentationJti
 
@@ -180,9 +180,13 @@ def verify_presentation(presentation, expected_purpose=None):
                         'presentation purpose %r != expected %r'
                         % (purpose, expected_purpose))
     elements = _elements_from_payload(payload)
-    # jti を消費 (検証成功後)。呼出側の commit に含める
-    from invenio_db import db
-    db.session.add(DacPresentationJti(jti=jti, presented_by=presented_by))
     meta = {'sub': payload.get('sub'), 'presented_by': presented_by,
             'purpose': purpose, 'jti': jti, 'iss': payload.get('iss')}
+    # 委任の裏づけ (as-receipt の AS 署名) と範囲 (型・purpose・期限) を検証する
+    # (分冊05 §11.5.3)。逸脱は presentation-delegation-mismatch (401)。jti を消費
+    # する前に行う — 拒否される提示物で jti を焼かないため。
+    meta = delegation.verify_delegation(payload, elements, meta)
+    # jti を消費 (全検証を通過後)。呼出側の commit に含める
+    from invenio_db import db
+    db.session.add(DacPresentationJti(jti=jti, presented_by=presented_by))
     return meta, elements

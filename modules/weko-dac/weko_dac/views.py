@@ -579,7 +579,13 @@ def _access_token_impl(raw_dataset_id):
                 'credential_format': 'ga4gh-visa+jwt',
                 'credential_id': used_cid,
                 'credential_types': cred_types,
-                'purpose': pmeta.get('purpose')}
+                'purpose': pmeta.get('purpose'),
+                # dual-stream 監査 (分冊04 §6.1): 提示物の jti と委任の裏づけを
+                # 検証者側イベントに残す。ウォレットの wallet.presented (同じ jti)
+                # と突き合わせれば、履歴に無いのに検証された提示を外から検出できる。
+                'presentation_jti': pmeta.get('jti'),
+                'delegation_type': pmeta.get('delegation_type'),
+                'delegation_ref': pmeta.get('delegation_ref')}
     except AuthError as err:
         db.session.rollback()
         return err.as_response()
@@ -600,7 +606,10 @@ def _access_token_impl(raw_dataset_id):
                           'credential_types': meta['credential_types'],
                           'credential_id': meta['credential_id'],
                           'presentation_absent':
-                          meta['presentation_absent']})
+                          meta['presentation_absent'],
+                          'presentation_jti': meta['presentation_jti'],
+                          'delegation_type': meta['delegation_type'],
+                          'delegation_ref': meta['delegation_ref']})
     db.session.commit()
     return jsonify({
         'download_url': '{0}/api/dac/v1/download?token={1}'.format(

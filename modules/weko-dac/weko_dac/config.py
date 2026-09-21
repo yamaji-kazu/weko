@@ -7,6 +7,7 @@ with ``[DEMO]`` and mirror docs/demo/10_demo_idp_keycloak_setup.md and
 11_demo_grant_wallet_impl.md of the aifs spec set.
 """
 
+import json
 import os
 
 # --- Identity of this DAC / RAGS entity -----------------------------------
@@ -88,6 +89,16 @@ WEKO_DAC_OIDC_ISSUER = os.environ.get('WEKO_DAC_OIDC_ISSUER', '')
 #: JWKS URL. Default derives from the issuer (Keycloak layout). May be an
 #: internal URL when the issuer is only reachable via a proxy.
 WEKO_DAC_OIDC_JWKS_URL = os.environ.get('WEKO_DAC_OIDC_JWKS_URL', '')
+
+#: [DEMO] In-memory JWK list of the AS (Authorization Server) that signs
+#: delegation receipts (``as-receipt``, 分冊05 §11.5.5). Used to verify the
+#: receipt embedded in a presentation's ``delegation.raw`` — the same key
+#: family as the delegation-token issuer. When empty, verification falls
+#: back to fetching WEKO_DAC_OIDC_JWKS_URL. Parsed from JSON when given via
+#: the environment.
+WEKO_DAC_AS_INLINE_JWKS = (
+    json.loads(os.environ['WEKO_DAC_AS_INLINE_JWKS'])
+    if os.environ.get('WEKO_DAC_AS_INLINE_JWKS') else None)
 
 #: Path to a CA bundle for TLS verification of IdP/Wallet endpoints
 #: (self-signed demo certificate). Empty string disables verification

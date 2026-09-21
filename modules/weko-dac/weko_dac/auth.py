@@ -68,6 +68,8 @@ PROBLEM_TITLES = {
     'unknown_wallet': '未知のウォレットです',
     'presentation_expired': '提示の有効期限が切れています',
     'presentation_replayed': '提示が再利用されました',
+    'presentation_delegation_mismatch': '提示が委任の範囲を超えています',
+    'delegation_verifier_unconfigured': '委任レシートの検証鍵が未設定です',
     'agent_not_allowlisted': 'エージェントが許可リストにありません',
     'visa_expired': 'Visa の有効期限が切れています',
     'invalid_visa': 'Visa が不正です',
