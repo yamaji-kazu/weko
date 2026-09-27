@@ -99,7 +99,7 @@
       "required": ["identifier", "type"],
       "properties": {
         "identifier": {"type": "string"},
-        "type": {"enum": ["doi", "handle", "url", "other"]}
+        "type": {"enum": ["doi", "handle", "ark", "url", "other"]}
       }
     }
   }
