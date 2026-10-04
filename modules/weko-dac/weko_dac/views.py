@@ -619,7 +619,7 @@ def _access_token_impl(raw_dataset_id):
     db.session.commit()
     return jsonify({
         'download_url': '{0}/api/dac/v1/download?token={1}'.format(
-            current_app.config['WEKO_DAC_ENTITY_ID'], token),
+            current_app.config['WEKO_DAC_DOWNLOAD_BASE_URL'], token),
         'file_name': _distribution_file_name(offer_row),
         'expires_in': current_app.config['WEKO_DAC_DOWNLOAD_URL_TTL'],
         'checksum': ({'algorithm': 'sha256', 'value': offer_row.checksum}
@@ -742,7 +742,7 @@ def _open_access_impl(raw):
     db.session.commit()
     return jsonify({
         'download_url': '{0}/api/dac/v1/download?token={1}'.format(
-            current_app.config['WEKO_DAC_ENTITY_ID'], token),
+            current_app.config['WEKO_DAC_DOWNLOAD_BASE_URL'], token),
         'file_name': _distribution_file_name(offer_row),
         'expires_in': current_app.config['WEKO_DAC_DOWNLOAD_URL_TTL'],
         'checksum': ({'algorithm': 'sha256', 'value': offer_row.checksum}

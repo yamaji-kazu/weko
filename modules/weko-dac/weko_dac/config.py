@@ -237,3 +237,10 @@ WEKO_DAC_AUDIT_JSONL_PATH = os.environ.get('WEKO_DAC_AUDIT_JSONL_PATH', '')
 #: False to fall back to record-only verification.
 WEKO_DAC_PASSPORT_ENFORCE = os.environ.get(
     'WEKO_DAC_PASSPORT_ENFORCE', 'true').lower() != 'false'
+
+#: ダウンロード URL の基底。これは**識別子ではなく接続先**である。既定は
+#: ENTITY_ID だが、Entity ID がエージェントから到達できない識別子のとき
+#: (例: 公開 IP とドメイン / 私設 IP の食い違い)は、到達できる接続先で上書きする
+#: (CLAUDE.md「識別子と接続先は別物」。mdx の ACL でこの分離が運用に出る)。
+WEKO_DAC_DOWNLOAD_BASE_URL = os.environ.get(
+    'WEKO_DAC_DOWNLOAD_BASE_URL', WEKO_DAC_ENTITY_ID)
