@@ -162,6 +162,13 @@ WEKO_DAC_PRESENTATION_MAX_AGE = 300
 #: ``presentation_absent`` in the audit trail.
 WEKO_DAC_ALLOW_DIRECT_VISA = True
 
+#: 委任が要る経路 (代理エージェントの提示) で ``delegation`` クレームが欠けていたとき、
+#: ``presentation-delegation-missing`` (401) で止めるか。移行期は False で従来どおり
+#: 受理する (§11.5.4 の移行互換)。デモ02 の通し完了をもって True に上げる (移行期の
+#: 終了)。欠落は発行時に決まる形式の不備で、研究者にできることはないので 401 系で返す
+#: (403 に寄せない — 分冊01 §5.8.1・§5.8.4、§11.5.4)。
+WEKO_DAC_REQUIRE_DELEGATION = False
+
 # --- Signing keys ---------------------------------------------------------
 
 #: Path to the ES256 private key (PEM, PKCS#8) used to sign Agreements,

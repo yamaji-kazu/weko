@@ -385,6 +385,12 @@ def grant_registered(dataset_id, researcher_sub, agent_id,
                        '利用目的が Offer の許容範囲外です (%s)'
                        % verdict['primary'])
 
+    # §11.2.2 / §6.3 手順7: 資格・目的を通しても、資源がエンバーゴ中なら配信しない。
+    # 公開状態は資格とは別の事項 (§8.1a)。明け日未確定も「まだ明けていない」扱い。
+    embargoed, _lift, ereason = matching.evaluate_embargo(offer_row.offer or {})
+    if embargoed:
+        raise RegError(403, 'resource_embargoed', ereason or 'resource is embargoed')
+
     application = DacApplication(
         application_id='app-{0}-{1}'.format(
             datetime.utcnow().strftime('%Y'), uuid.uuid4().hex[:8]),

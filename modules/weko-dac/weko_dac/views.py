@@ -13,7 +13,8 @@ from flask import (Blueprint, Response, current_app, g, jsonify, redirect,
                    request, send_file)
 from invenio_db import db
 
-from . import allowlist, audit, presentation, registered, services, signing
+from . import (allowlist, audit, matching, presentation, registered, services,
+               signing)
 from .auth import (AuthError, jwk_to_public_key, problem_title, problem_type,
                    require_rags_token, verify_jws)
 from .models import (DacAgreement, DacApplication, DacMessage, DacOffer,
@@ -575,6 +576,11 @@ def _access_token_impl(raw_dataset_id):
             raise AuthError(403, 'requirements_not_met',
                             'no DataAccessGrant for this dataset was '
                             'presented')
+        # §6.3 手順7: エンバーゴ (公開開始前) は、手順1-6 を通しても独立に効く。
+        # 資源の公開状態は資格・許諾とは別の事項なので、ここで現在時刻と突き合わせる。
+        embargoed, _lift, ereason = matching.evaluate_embargo(offer_row.offer or {})
+        if embargoed:
+            raise AuthError(403, 'resource_embargoed', ereason or 'resource is embargoed')
         meta = {'presentation_absent': presentation_absent,
                 'credential_format': 'ga4gh-visa+jwt',
                 'credential_id': used_cid,

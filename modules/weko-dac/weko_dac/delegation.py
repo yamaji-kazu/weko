@@ -68,6 +68,17 @@ def verify_delegation(payload, elements, meta):
     """
     delegation = payload.get('delegation')
     if not isinstance(delegation, dict):
+        # 委任が要る経路 (代理エージェントの提示) で delegation が欠けている。移行期は
+        # 従来どおり受理する (§11.5.4 の移行互換)。移行期の終了後 (デモ02 の通し完了→
+        # WEKO_DAC_REQUIRE_DELEGATION=True) は presentation-delegation-missing (401)。
+        # 欠落は発行時に決まる形式の不備で研究者にできることはないので 401 系で止める
+        # (403 に寄せない。分冊01 §5.8.1・§5.8.4、§11.5.4)。
+        if current_app.config.get('WEKO_DAC_REQUIRE_DELEGATION'):
+            raise AuthError(
+                401, 'presentation_delegation_missing',
+                'a delegation is required on this route but the presentation '
+                'carries no "delegation" claim; the wallet did not include a '
+                'required claim (issuance-time defect — re-presenting will not fix it)')
         return meta
 
     dtype = delegation.get('type')

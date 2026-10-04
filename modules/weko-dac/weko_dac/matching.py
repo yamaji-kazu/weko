@@ -172,6 +172,56 @@ def _judge(result, detail):
     return {'result': result, 'detail': detail}
 
 
+def evaluate_embargo(offer_doc, anchor_dates=None, today=None):
+    """エンバーゴ (公開猶予) を現在時刻と突き合わせる (§8.1a / §6.3 手順7)。
+
+    Request との照合 (§8 の 2.) とは別で、資源が今公開可能かを見る。返り値は
+    ``(embargoed, lift, detail)``。``embargoed`` が真ならエンバーゴ中=配信しない。
+
+    - ``odrl:dateTime`` の ``gteq``: その日時以降なら公開可。未満ならエンバーゴ中。
+    - ``rdc:embargoPeriod`` (+ ``rdc:embargoAnchor``): 起点イベントの実日時に期間を
+      加えて明け日を定める。起点日時が未確定なら「まだ明けていない」として扱う
+      (不確定を公開に倒さない — §2.7)。
+    明け日が未確定のときも ``embargoed=True`` を返し、``lift`` は ``None``。
+    """
+    anchor_dates = anchor_dates or {}
+    today = today or date.today()
+    for perm in offer_doc.get('permission') or []:
+        constraints = perm.get('constraint') or []
+        for c in constraints:
+            left = c.get('leftOperand')
+            if isinstance(left, dict):
+                left = left.get('@id', '')
+            short = str(left).split('/')[-1].split(':')[-1]
+            op = str(c.get('operator', '')).split(':')[-1]
+            val = _operand_value(c.get('rightOperand'))
+            if short == 'dateTime' and op in ('gteq', 'gt'):
+                lift = _parse_date(val)
+                if lift is None:
+                    return (True, None,
+                            'embargo lift date %r unparseable; treated as not lifted'
+                            % val)
+                if today < lift:
+                    return (True, lift, 'embargoed until %s' % lift.isoformat())
+            elif short == 'embargoPeriod':
+                anchor = None
+                for cc in constraints:
+                    lo = cc.get('leftOperand')
+                    if isinstance(lo, dict):
+                        lo = lo.get('@id', '')
+                    if str(lo).split('/')[-1].split(':')[-1] == 'embargoAnchor':
+                        anchor = str(_operand_value(cc.get('rightOperand')))
+                anchor_date = anchor_dates.get(anchor)
+                if anchor_date is None:
+                    return (True, None,
+                            'embargo anchor %r date unknown; treated as not lifted'
+                            % anchor)
+                lift = _duration_to_end(val, start=anchor_date)
+                if lift and today < lift:
+                    return (True, lift, 'embargoed until %s' % lift.isoformat())
+    return (False, None, '')
+
+
 def evaluate_constraint(offer_c, request_perm, period_start=None):
     """Evaluate one Offer constraint against the Request (§8 item 2)."""
     left = offer_c.get('leftOperand')
@@ -183,6 +233,18 @@ def evaluate_constraint(offer_c, request_perm, period_start=None):
     op_short = operator.split(':')[-1]
     offer_val = _operand_value(offer_c.get('rightOperand'))
     req_c = _find_constraint(request_perm.get('constraint'), left)
+
+    # エンバーゴ (公開開始) は Request ではなく現在時刻と突き合わせる配送時の判定
+    # (§8.1a / §6.3 手順7)。ここで Request と照合すると、対応値が Request に無く
+    # not_satisfied / needs_human に倒れてしまう。マッチングでは素通しにし、
+    # evaluate_embargo() で別に見る。gteq の dateTime も同じ(公開開始の絶対日)。
+    if short in ('embargoPeriod', 'embargoAnchor'):
+        return _judge('satisfied',
+                      'embargo evaluated against current time at delivery (§8.1a)')
+    if short == 'dateTime' and op_short in ('gteq', 'gt'):
+        return _judge('satisfied',
+                      'publication-start (embargo) is evaluated at delivery, '
+                      'not matched against the Request (§8.1a)')
 
     # purpose (DUO: membership in the permitted set, §12.2.2)
     if short == 'purpose':
