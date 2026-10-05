@@ -16,7 +16,9 @@
 set -u
 WAPI=http://127.0.0.1:7006/wallet
 OFFICER=${OFFICER:-officer1@nii.ac.jp}
-E2E_SUB=${E2E_SUB:-96a5caca-871e-46f3-979d-b173ac1c8377}
+# 確認用ユーザ e2e-appr-requester の sub。2026-10-05 の初回はここをハナコ(96a5caca…)にしていて、
+# 確認用の Visa 2 本がハナコのウォレットに預けられた。デモのユーザの sub は使わない。
+E2E_SUB=${E2E_SUB:-ff6e0ffc-ef95-459d-bda8-7da8b8a1f939}
 : "${OFFICER_WALLET_ID:?審査者の VC(この DAC)のウォレット}" "${OTHER_DAC_WALLET_ID:?別の DAC の審査者の VC のウォレット}"
 : "${UNTRUSTED_WALLET_ID:?公開テスト鍵の審査者の VC のウォレット}" "${PI_WALLET_ID:?PI の認可 VC のウォレット}"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
@@ -41,6 +43,8 @@ attempt(){ # $1=wallet $2=確認する人 [$3=tamper]
   echo "$pc/$(echo "$c" | jget 'd["result"]')/$(echo "$c" | jget 'd.get("code")')/$(echo "$c" | jget 'd["status"]')/$(echo "$c" | jget 'd.get("records")')"
 }
 
+# デモのユーザの sub を申請者にしない(許諾の Visa がその人のウォレットに預けられる)
+case "$E2E_SUB" in 96a5caca-*|049633ee-*) echo "NG: E2E_SUB がデモのユーザ(hanako/taro)の sub"; exit 2;; esac
 echo "== 0. 確認専用の申請を under_review で作る(本物の controlled の申請から形だけ借りる。生の Passport は写さない)"
 r=$(drv create-app "$E2E_SUB"); APP=$(echo "$r" | jget 'd["app_id"]')
 [ -n "$APP" ] && ok "申請 $APP($(echo "$r" | jget 'd["dataset"]'))" || { ng "申請を作れない: $r"; exit 1; }
