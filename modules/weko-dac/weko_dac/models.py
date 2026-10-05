@@ -259,3 +259,67 @@ __all__ = (
     'DacEventOutbox', 'DacAuditOutbox',
     'APPLICATION_STATES', 'ALLOWED_TRANSITIONS', 'new_id',
 )
+
+
+class DacGrantApproval(db.Model):
+    """許諾の決定の VP 承認(aifs ADR-16)。審査者が承認を選ぶと pending で作り、VP を確かめて
+    approved にする。決定(decision・reason・conditions)は署名で束ねた中身で、確定もこの値で行う。"""
+
+    __tablename__ = 'dac_grant_approval'
+
+    id = db.Column(db.Integer, primary_key=True)
+    #: 承認の単位(承認記録・ログ・説明文と共通。'dac-grant:<uuid>')
+    subject_id = db.Column(db.String(80), unique=True, nullable=False)
+    application_id = db.Column(db.String(64), nullable=False, index=True)
+    decision = db.Column(db.String(32), nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    conditions = db.Column(JSONB, nullable=True)
+    officer_id = db.Column(db.String(255), nullable=False)
+    session_id = db.Column(db.String(80), nullable=False)
+    #: 提示要求に実際に載った取引の SHA-256(R5-8)
+    txdata_hash = db.Column(db.String(64), nullable=True)
+    authorization_request_url = db.Column(db.Text, nullable=True)
+    #: pending | approved | failed:<理由>
+    state = db.Column(db.String(64), nullable=False, default='pending')
+    record_id = db.Column(db.String(64), nullable=True)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+
+class DacApprovalRecord(db.Model):
+    """署名済みの承認記録(公開要約と完全記録の 2 つの JWS。aifs ADR-11/ADR-16)。"""
+
+    __tablename__ = 'dac_approval_record'
+
+    record_id = db.Column(db.String(64), primary_key=True)
+    subject_id = db.Column(db.String(80), nullable=False, index=True)
+    application_id = db.Column(db.String(64), nullable=False, index=True)
+    summary_jws = db.Column(db.Text, nullable=False)
+    full_jws = db.Column(db.Text, nullable=False)
+    kid = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+
+class DacApprovalLog(db.Model):
+    """承認の過程のログ(ハッシュ連鎖。aifs ADR-13)。(subject_id, seq) で連鎖が割れない。"""
+
+    __tablename__ = 'dac_approval_log'
+    __table_args__ = (db.UniqueConstraint('subject_id', 'seq'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    subject_id = db.Column(db.String(80), nullable=False, index=True)
+    seq = db.Column(db.Integer, nullable=False)
+    kind = db.Column(db.String(16), nullable=False)
+    jws = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+
+class DacApprovalExplanation(db.Model):
+    """審査者が承認の前に読む説明文(R5-4)。id は推測困難な能力 URL を兼ねる。"""
+
+    __tablename__ = 'dac_approval_explanation'
+
+    id = db.Column(db.String(32), primary_key=True)
+    subject_id = db.Column(db.String(80), nullable=False, index=True)
+    body = db.Column(db.Text, nullable=False)
+    digest = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)

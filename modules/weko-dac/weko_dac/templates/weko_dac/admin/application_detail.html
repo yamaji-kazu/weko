@@ -61,6 +61,27 @@
     </ul>
   </div>
   <div class="col-md-6">
+    {% if grant_approvals %}
+    <h4>許諾の署名(審査者の VP)</h4>
+    <ul class="list-group">
+      {% for g in grant_approvals %}
+      <li class="list-group-item">
+        <strong>{{ g.decision }}</strong> — {{ g.officer_id }} — 状態: <code>{{ g.state }}</code>
+        ({{ g.created_at.strftime('%Y-%m-%d %H:%M') }})<br>
+        {% if g.state == 'pending' %}
+        ウォレットで次の提示要求に応え、審査者の VC で取引に署名してください:<br>
+        <code style="word-break: break-all">{{ g.authorization_request_url }}</code>
+        <form method="post" action="{{ url_for('.confirm_grant_approval', app_id=application.application_id, subject_id=g.subject_id) }}">
+          {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+          <button type="submit" class="btn btn-primary btn-sm">署名を確認して許諾を確定</button>
+        </form>
+        {% elif g.record_id %}
+        承認記録: <a href="{{ url_for('weko_dac_api.approval_summary', record_id=g.record_id) }}">{{ g.record_id }}</a>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
     <h4>決裁</h4>
     {% if application.status in ['under_review', 'needs_info'] %}
     <form method="post" action="{{ url_for('.decision', app_id=application.application_id) }}">

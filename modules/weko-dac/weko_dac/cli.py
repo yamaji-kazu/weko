@@ -23,6 +23,9 @@ def init():
         models.DacDecision.__table__, models.DacAgreement.__table__,
         models.DacVisa.__table__, models.DacPresentationJti.__table__,
         models.DacEventOutbox.__table__, models.DacAuditOutbox.__table__,
+        # 許諾の VP 承認(aifs ADR-16)
+        models.DacGrantApproval.__table__, models.DacApprovalRecord.__table__,
+        models.DacApprovalLog.__table__, models.DacApprovalExplanation.__table__,
     ]
     db.metadata.create_all(bind=db.engine, tables=tables, checkfirst=True)
     click.secho('Tables created (checkfirst).', fg='green')

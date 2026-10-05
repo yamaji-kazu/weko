@@ -676,7 +676,7 @@ def flush_pending_events(application_id=None):
 
 def execute_decision(application, decision, reason, officer_id,
                      conditions=None, inquiry_body=None,
-                     assessment_row=None):
+                     assessment_row=None, grant_approval_record=None):
     """Execute an officer decision (Phase 1: human decides everything).
 
     decision: approve | approve_with_conditions | reject | request_info
@@ -684,6 +684,14 @@ def execute_decision(application, decision, reason, officer_id,
     states.
     """
     from .models import DacDecision
+    from . import grant_approval_service
+
+    # aifs ADR-16: VP 承認が有効なら、許諾を出す決定は審査者の署名(承認記録)なしに通さない。
+    # 管理画面だけでなく、ここを呼ぶ全経路で塞ぐ。
+    if (decision in ('approve', 'approve_with_conditions')
+            and grant_approval_service.vp_enabled()
+            and not grant_approval_record):
+        raise ValueError('A grant requires the officer\'s VP approval (aifs ADR-16)')
 
     if application.status == 'needs_info' and decision != 'request_info':
         # Officer may decide while an inquiry is pending.
@@ -710,7 +718,8 @@ def execute_decision(application, decision, reason, officer_id,
                  actor={'kind': 'human', 'id': officer_id},
                  payload={'decision': decision,
                           'diverges_from_ai': row.diverges_from_ai,
-                          'assessment_id': row.assessment_id})
+                          'assessment_id': row.assessment_id,
+                          'approval_record_id': grant_approval_record})
 
     if decision in ('approve', 'approve_with_conditions'):
         transition(application, 'approved')

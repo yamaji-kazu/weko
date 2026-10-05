@@ -68,6 +68,9 @@ class DacApplicationView(_OfficerView):
             application_id=app_id).order_by(DacMessage.id).all()
         decisions = DacDecision.query.filter_by(
             application_id=app_id).order_by(DacDecision.id).all()
+        from .models import DacGrantApproval
+        grant_approvals = DacGrantApproval.query.filter_by(
+            application_id=app_id).order_by(DacGrantApproval.id.desc()).all()
         return self.render(
             'weko_dac/admin/application_detail.html',
             application=application,
@@ -77,7 +80,8 @@ class DacApplicationView(_OfficerView):
             payload_json=json.dumps(
                 application.payload, ensure_ascii=False, indent=2),
             messages=messages,
-            decisions=decisions)
+            decisions=decisions,
+            grant_approvals=grant_approvals)
 
     @staticmethod
     def _generate(application):
@@ -127,6 +131,18 @@ class DacApplicationView(_OfficerView):
             application_id=app_id).order_by(
             DacAssessment.id.desc()).first()
         officer = current_user.email or str(current_user.get_id())
+        from . import grant_approval_service as gas
+        if decision in ('approve', 'approve_with_conditions') and gas.vp_enabled():
+            # aifs ADR-16: 許諾を出す決定は、審査者が自分のウォレットで署名して初めて確定する
+            try:
+                gas.request_grant(application, decision, reason, conditions,
+                                  {'id': officer, 'name': officer})
+            except gas.ApprovalRejected as ex:
+                db.session.rollback()
+                flash(_('VP approval could not be requested: %(c)s', c=ex.code), 'error')
+                return redirect(url_for('.detail', app_id=app_id))
+            flash(_('Sign the grant with your wallet, then press Confirm.'))
+            return redirect(url_for('.detail', app_id=app_id))
         try:
             services.execute_decision(
                 application, decision, reason, officer,
@@ -138,6 +154,23 @@ class DacApplicationView(_OfficerView):
             flash(str(ex), 'error')
             return redirect(url_for('.detail', app_id=app_id))
         flash(_('Decision recorded: %(d)s', d=decision))
+        return redirect(url_for('.detail', app_id=app_id))
+
+    @expose('/<app_id>/grant-approval/<path:subject_id>/confirm', methods=['POST'])
+    def confirm_grant_approval(self, app_id, subject_id):
+        """aifs ADR-16: 審査者の VP を確かめ、承認記録と許諾を一緒に確定する。"""
+        application = DacApplication.query.filter_by(
+            application_id=app_id).first()
+        if application is None:
+            abort(404)
+        from . import grant_approval_service as gas
+        officer = current_user.email or str(current_user.get_id())
+        try:
+            gas.confirm_grant(subject_id, officer, application)
+        except gas.ApprovalRejected as ex:
+            flash(_('Grant not confirmed: %(c)s', c=ex.code), 'error')
+            return redirect(url_for('.detail', app_id=app_id))
+        flash(_('Grant signed and issued.'))
         return redirect(url_for('.detail', app_id=app_id))
 
     @expose('/<app_id>/revoke', methods=['POST'])

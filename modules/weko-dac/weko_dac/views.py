@@ -237,6 +237,39 @@ def visa_jwks():
         return _problem(503, 'key_unavailable', str(ex))
 
 
+@blueprint_api.route('/approvals/jwks.json', methods=['GET'])
+def approvals_jwks():
+    """承認記録(許諾の VP 承認)の検証鍵。Visa の鍵とは別(aifs ADR-16、R9-10)。"""
+    from . import grant_approval_service as gas
+    try:
+        return jsonify(gas.approvals_jwks())
+    except gas.ApprovalRejected as ex:
+        return _problem(503, 'key_unavailable', ex.code)
+
+
+@blueprint_api.route('/approvals/explain/<exp_id>', methods=['GET'])
+def approval_explanation(exp_id):
+    """審査者が署名の前に読む説明文(R5-4)。id は推測困難な能力 URL。"""
+    from .models import DacApprovalExplanation
+    row = DacApprovalExplanation.query.get(exp_id)
+    if row is None:
+        return _problem(404, 'not_found', 'explanation')
+    resp = current_app.response_class(row.body, mimetype='text/markdown; charset=utf-8')
+    resp.headers['Digest'] = 'sha-256=' + row.digest
+    return resp
+
+
+@blueprint_api.route('/approvals/<record_id>', methods=['GET'])
+def approval_summary(record_id):
+    """公開要約(JWS)。誰が承認したか・取引の中身は含まない(R9-6a)。"""
+    from .models import DacApprovalRecord
+    row = DacApprovalRecord.query.get(record_id)
+    if row is None:
+        return _problem(404, 'not_found', 'approval record')
+    return current_app.response_class(
+        row.summary_jws, mimetype='application/jwt')
+
+
 @blueprint_api.route('/visa-status', methods=['GET'])
 def visa_status():
     """Revocation / status lookup for issued Visas (§6.2)."""
