@@ -8,6 +8,11 @@
 #
 # 審査者の VC は rdc_portal_proto の scripts/issue-e2e-authz-vc.py --profile dacOfficerAuthz で発行する。
 # 拒否は形(code)まで固定して見る。確認専用の申請は e2e-grant-* で、driver の cleanup で消せる。
+#
+# 2026-10-05 の実測: シェル 10・検算 11 がすべて OK(申請 e2e-grant-874691a2)。確認の手段を疑うため、
+# 別の DAC の VC の代わりにこの DAC の審査者の VC を渡すと、その行が NG(200/approved)になり、以降も
+# not_under_review で NG に倒れることを確かめた(緑が嘘でない)。PI の VC は vct が違うので wallet-api2 が
+# 提示を作れず HTTP 500 になる。weko-dac 自身の型の検査(not_dac_officer_credential)は単体試験で見る。
 set -u
 WAPI=http://127.0.0.1:7006/wallet
 OFFICER=${OFFICER:-officer1@nii.ac.jp}
