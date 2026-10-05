@@ -10,6 +10,7 @@
   python grant_e2e_driver.py tamper <subject_id>              保存した理由を書き換える(content_changed の対照)
   python grant_e2e_driver.py confirm <subject_id> <officer> <app_id>
   python grant_e2e_driver.py show <app_id>                    申請・決定・承認記録・ログ・説明文を返す
+  python grant_e2e_driver.py revoke-e2e [--apply]           確認専用の active な許諾を取り消す(既定は表示だけ)
   python grant_e2e_driver.py cleanup [--apply]                確認専用の申請を消す(既定は表示だけ)
 """
 import json
@@ -120,6 +121,22 @@ def main(argv):
                            'full_jws': rec.full_jws, 'kid': rec.kid} if rec else None,
                    log=[{'seq': l.seq, 'kind': l.kind, 'jws': l.jws} for l in logs],
                    explanations=[{'id': e.id, 'body': e.body, 'digest': e.digest} for e in exps])
+
+    if cmd == 'revoke-e2e':
+        # 確認専用の許諾(e2e-grant-*)だけを取り消す。既定は表示だけ。
+        apps = DacApplication.query.filter(
+            DacApplication.application_id.like(E2E_PREFIX + '%'),
+            DacApplication.status == 'active').all()
+        rows = [{'app_id': a.application_id, 'researcher_sub': a.researcher_sub,
+                 'visas': [{'jti': v.jti, 'status': v.status,
+                            'wallet_credential_id': v.wallet_credential_id}
+                           for v in DacVisa.query.filter_by(application_id=a.application_id)]}
+                for a in apps]
+        if '--apply' not in argv:
+            return out(dry_run=True, targets=rows, hint='取り消すには revoke-e2e --apply')
+        for a in apps:
+            services.revoke_grant(a, 'e2e: 確認用の許諾をデモのユーザに誤って発行したため取り消す', 'e2e-cleanup')
+        return out(revoked=rows)
 
     if cmd == 'cleanup':
         apps = DacApplication.query.filter(
