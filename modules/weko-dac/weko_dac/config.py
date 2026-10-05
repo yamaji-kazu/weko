@@ -253,7 +253,7 @@ WEKO_DAC_VERIFIER_BASE_URL = os.environ.get('WEKO_DAC_VERIFIER_BASE_URL', '')
 WEKO_DAC_TRUSTED_AUTHZ_ISSUERS = os.environ.get('WEKO_DAC_TRUSTED_AUTHZ_ISSUERS', '')
 #: 承認記録専用の署名鍵(P-256、PEM)。Visa に署名する鍵とは分ける(R9-10)。
 WEKO_DAC_APPROVAL_SIGNING_KEY_PATH = os.environ.get('WEKO_DAC_APPROVAL_SIGNING_KEY_PATH', '')
-#: 承認記録の発行者(公開基盤の識別子)。公開要約は <発行者>/dac/v1/approvals/<id>。
+#: 承認記録の発行者(公開基盤の識別子)。公開要約は <発行者>/api/dac/v1/approvals/<id>。
 WEKO_DAC_APPROVAL_ISSUER = os.environ.get('WEKO_DAC_APPROVAL_ISSUER', WEKO_DAC_ENTITY_ID)
 #: 提示要求を作ってから確認までの期限(秒)
 WEKO_DAC_GRANT_APPROVAL_TTL = int(os.environ.get('WEKO_DAC_GRANT_APPROVAL_TTL', '3600'))

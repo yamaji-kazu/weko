@@ -76,7 +76,7 @@
           <button type="submit" class="btn btn-primary btn-sm">署名を確認して許諾を確定</button>
         </form>
         {% elif g.record_id %}
-        承認記録: <a href="{{ url_for('weko_dac_api.approval_summary', record_id=g.record_id) }}">{{ g.record_id }}</a>
+        承認記録: <a href="/api/dac/v1/approvals/{{ g.record_id }}">{{ g.record_id }}</a>
         {% endif %}
       </li>
       {% endfor %}

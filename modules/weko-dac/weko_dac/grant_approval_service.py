@@ -151,7 +151,7 @@ def request_grant(application, decision, reason, conditions, officer):
         ga.GRANT_REVERSIBLE['how'])
     exp = DacApprovalExplanation(id=uuid.uuid4().hex, subject_id='', body=body,
                                  digest=ga.sha256_b64url(body))
-    explanation = {'url': '%s/dac/v1/approvals/explain/%s' % (_issuer(), exp.id),
+    explanation = {'url': '%s/api/dac/v1/approvals/explain/%s' % (_issuer(), exp.id),
                    'digest': exp.digest}
     entry = ga.build_grant_entry(content, officer, _issuer(), explanation, not_after)
     created = _verifier('POST', '/verification-session/create', ga.session_create_body(entry))
