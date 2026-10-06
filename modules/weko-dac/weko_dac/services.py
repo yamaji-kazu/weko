@@ -728,9 +728,14 @@ def execute_decision(application, decision, reason, officer_id,
         # Wallet deposit (§6.2): confirm before the agreement.issued
         # callback; failures fall back to the application resource and
         # are retried by the periodic task.
+        # 預ける前に flush して、列の既定値(issued_at など)を確定させる。flush しないと
+        # issued_at が None のまま預け入れが例外になり、定期の再試行(約 2 分後)まで Visa が
+        # ウォレットに入らず、DG の取得がそのぶん待たされた(2026-10-07、app-2026-eda8682e で実測)
+        db.session.flush()
         for agreement, visa in issued:
             try:
-                deposit_visa_to_wallet(visa)
+                # registered の発行(registered.py)と同じく、短時間だけ再試行する
+                deposit_visa_to_wallet_retry(visa)
             except Exception:
                 current_app.logger.exception(
                     'weko-dac: wallet deposit error for %s', visa.jti)
