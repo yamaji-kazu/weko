@@ -11,6 +11,7 @@
   python grant_e2e_driver.py confirm <subject_id> <officer> <app_id>
   python grant_e2e_driver.py show <app_id>                    申請・決定・承認記録・ログ・説明文を返す
   python grant_e2e_driver.py revoke-e2e [--apply]           確認専用の active な許諾を取り消す(既定は表示だけ)
+  python grant_e2e_driver.py purge-apps <app_id>... [--apply]  名指しの申請と結び付くものを消す(監査は残す。既定は表示だけ)
   python grant_e2e_driver.py cleanup [--apply]                確認専用の申請を消す(既定は表示だけ)
 """
 import json
@@ -137,6 +138,35 @@ def main(argv):
         for a in apps:
             services.revoke_grant(a, 'e2e: 確認用の許諾をデモのユーザに誤って発行したため取り消す', 'e2e-cleanup')
         return out(revoked=rows)
+
+    if cmd == 'purge-apps':
+        # 名指しした申請と、それに結び付く許諾・Visa・決定・通知・許諾の承認(記録・ログ・説明文)を消す。
+        # 監査(dac_audit_outbox・dac_audit.jsonl)は残す。既定は表示だけ。2026-10-06「実験のデータは消す」
+        ids = [a for a in argv[1:] if not a.startswith('--')]
+        subj = [g.subject_id for g in DacGrantApproval.query.filter(
+            DacGrantApproval.application_id.in_(ids)).all()] if ids else []
+        from weko_dac.models import DacAssessment, DacMessage
+        plan = []
+        for m, col, vals in ((DacApprovalLog, 'subject_id', subj),
+                             (DacApprovalExplanation, 'subject_id', subj),
+                             (DacApprovalRecord, 'subject_id', subj),
+                             (DacGrantApproval, 'application_id', ids),
+                             (DacVisa, 'application_id', ids),
+                             (DacAgreement, 'application_id', ids),
+                             (DacDecision, 'application_id', ids),
+                             (DacMessage, 'application_id', ids),
+                             (DacAssessment, 'application_id', ids),
+                             (DacEventOutbox, 'application_id', ids),
+                             (DacApplication, 'application_id', ids)):
+            q = m.query.filter(getattr(m, col).in_(vals)) if vals else None
+            plan.append((m.__tablename__, q.count() if q is not None else 0))
+            if '--apply' in argv and q is not None:
+                q.delete(synchronize_session=False)
+        if '--apply' in argv:
+            db.session.commit()
+        return out(applied='--apply' in argv, applications=ids, counts=plan,
+                   remaining={'dac_grant_approval': DacGrantApproval.query.count(),
+                              'dac_approval_record': DacApprovalRecord.query.count()})
 
     if cmd == 'cleanup':
         apps = DacApplication.query.filter(
