@@ -76,8 +76,8 @@
           <div>スマホの walt.id ウォレットでこの QR コードを読み取り、審査者の VC で取引に署名してください。</div>
         </div>
         {% endif %}
-        ウォレットで次の提示要求に応え、審査者の VC で取引に署名してください:<br>
-        <code style="word-break: break-all">{{ g.authorization_request_url }}</code>
+        ウォレットで次の提示要求に応え、審査者の VC で取引に署名してください(スマホでこの画面を開いているときは、タップするとウォレットが開きます):<br>
+        <a href="{{ g.authorization_request_url }}"><code style="word-break: break-all">{{ g.authorization_request_url }}</code></a>
         <form method="post" action="{{ url_for('.confirm_grant_approval', app_id=application.application_id, subject_id=g.subject_id) }}">
           {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
           <button type="submit" class="btn btn-primary btn-sm">署名を確認して許諾を確定</button>
