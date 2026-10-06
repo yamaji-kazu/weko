@@ -69,6 +69,7 @@ class DacApplicationView(_OfficerView):
         decisions = DacDecision.query.filter_by(
             application_id=app_id).order_by(DacDecision.id).all()
         from .models import DacGrantApproval
+        from .grant_approval import short_request_url
         grant_approvals = DacGrantApproval.query.filter_by(
             application_id=app_id).order_by(DacGrantApproval.id.desc()).all()
         return self.render(
@@ -81,7 +82,10 @@ class DacApplicationView(_OfficerView):
                 application.payload, ensure_ascii=False, indent=2),
             messages=messages,
             decisions=decisions,
-            grant_approvals=grant_approvals)
+            grant_approvals=grant_approvals,
+            # QR に載せる短い提示要求 URL(完全な URL は QR に入りきらない)
+            grant_qr_urls={g.subject_id: short_request_url(g.authorization_request_url)
+                           for g in grant_approvals if g.state == 'pending'})
 
     @staticmethod
     def _generate(application):

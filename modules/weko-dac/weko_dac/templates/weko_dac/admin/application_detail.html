@@ -69,6 +69,13 @@
         <strong>{{ g.decision }}</strong> — {{ g.officer_id }} — 状態: <code>{{ g.state }}</code>
         ({{ g.created_at.strftime('%Y-%m-%d %H:%M') }})<br>
         {% if g.state == 'pending' %}
+        {% if grant_qr_urls.get(g.subject_id) %}
+        <div style="display:flex; align-items:center; gap:12px; margin:6px 0">
+          <div class="rdc-qr" data-url="{{ grant_qr_urls[g.subject_id] }}" aria-label="署名用の QR コード"
+               style="background:#fff; padding:8px; border:1px solid #ddd"></div>
+          <div>スマホの walt.id ウォレットでこの QR コードを読み取り、審査者の VC で取引に署名してください。</div>
+        </div>
+        {% endif %}
         ウォレットで次の提示要求に応え、審査者の VC で取引に署名してください:<br>
         <code style="word-break: break-all">{{ g.authorization_request_url }}</code>
         <form method="post" action="{{ url_for('.confirm_grant_approval', app_id=application.application_id, subject_id=g.subject_id) }}">
@@ -123,4 +130,14 @@
     {% endif %}
   </div>
 </div>
+{# 署名用の QR コード(aifs ADR-16)。短い形(request_uri)だけを QR にする。描くのはブラウザ側 #}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+  (function () {
+    if (typeof QRCode === 'undefined') return;
+    document.querySelectorAll('.rdc-qr').forEach(function (el) {
+      new QRCode(el, { text: el.getAttribute('data-url'), width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+    });
+  })();
+</script>
 {% endblock %}

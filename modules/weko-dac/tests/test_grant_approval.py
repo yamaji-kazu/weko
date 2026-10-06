@@ -137,3 +137,14 @@ def test_log_chain():
     pb = _dec(b.split('.')[1])
     assert pb['seq'] == 2 and pb['prev'] == ga.sha256_b64url(a)
     assert _dec(a.split('.')[1])['prev'] is None
+
+
+def test_short_request_url_for_qr():
+    full = ('openid4vp://authorize?response_type=vp_token&client_id=redirect_uri%3Ahttps%3A%2F%2Fw.example%2Fverifier%2Fverification-session%2Fabc%2Fresponse'
+            '&response_uri=https%3A%2F%2Fw.example%2Fverifier%2Fverification-session%2Fabc%2Fresponse&transaction_data=%5B%22x%22%5D')
+    short = ga.short_request_url(full)
+    assert short == ('openid4vp://authorize?client_id=redirect_uri%3Ahttps%3A%2F%2Fw.example%2Fverifier%2Fverification-session%2Fabc%2Fresponse'
+                     '&request_uri=https%3A%2F%2Fw.example%2Fverifier%2Fverification-session%2Fabc%2Frequest')
+    assert len(short) < len(full)
+    assert ga.short_request_url('openid4vp://authorize?client_id=x') is None
+    assert ga.short_request_url(None) is None

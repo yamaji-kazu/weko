@@ -267,3 +267,24 @@ def next_log_entry(prev_jws, prev_seq, issuer, subject_id, kind, body, at):
 
 def sign_log_entry(payload, pem, kid):
     return _sign(payload, pem, kid, LOG_TYP)
+
+
+def short_request_url(full_url):
+    """QR に載せる短い提示要求 URL(request_uri で中身を参照する形)を、完全な URL から作る。
+
+    完全な URL は取引を値で持ち 2,600〜5,000 文字になるので QR に入りきらない(2026-10-06 実測)。
+    walt.id verifier2 は同じセッションの提示要求を <response_uri の /response を /request に替えたもの>
+    で返す(公開の入口 wallet.nii-rdc.mydns.jp/verifier/…/request で取れる)。作れなければ None。
+    """
+    try:
+        from urllib.parse import parse_qs, quote, urlparse
+        q = parse_qs(urlparse(full_url or '').query)
+        client_id = (q.get('client_id') or [None])[0]
+        response_uri = (q.get('response_uri') or [None])[0]
+        if not client_id or not response_uri or not response_uri.endswith('/response'):
+            return None
+        request_uri = response_uri[:-len('/response')] + '/request'
+        return 'openid4vp://authorize?client_id=%s&request_uri=%s' % (
+            quote(client_id, safe=''), quote(request_uri, safe=''))
+    except Exception:
+        return None
