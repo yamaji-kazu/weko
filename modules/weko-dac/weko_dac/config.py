@@ -247,7 +247,11 @@ WEKO_DAC_DOWNLOAD_BASE_URL = os.environ.get(
 
 
 # --- 許諾の VP 承認(aifs ADR-16) -------------------------------------------
-#: walt.id verifier2 の接続先(識別子でなく接続先)。空なら VP 承認は無効(従来の web の決定)。
+#: 許諾を出す決定の承認の形(aifs ADR-18)。``web``(既定。管理画面にログインした審査者の決定)か
+#: ``vp``(審査者のスマホの署名を必須にする、ADR-16)。スマホを求めるのは研究実行の起動のような
+#: 大きな判断に限り、DAC の審査は人の判断だが二要素目は求めない、とした(2026-10-06 ユーザ判断)。
+WEKO_DAC_GRANT_APPROVAL_MODE = os.environ.get('WEKO_DAC_GRANT_APPROVAL_MODE', 'web')
+#: walt.id verifier2 の接続先(識別子でなく接続先)。``vp`` のときに使う。空なら VP 承認は無効。
 WEKO_DAC_VERIFIER_BASE_URL = os.environ.get('WEKO_DAC_VERIFIER_BASE_URL', '')
 #: 審査者の VC の発行者として信頼する DID(カンマ区切り)。空ならどの VP も通さない(fail-closed)。
 WEKO_DAC_TRUSTED_AUTHZ_ISSUERS = os.environ.get('WEKO_DAC_TRUSTED_AUTHZ_ISSUERS', '')

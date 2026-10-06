@@ -38,8 +38,13 @@ def _now_iso():
 
 
 def vp_enabled():
-    """verifier2 の接続先が設定されていれば、許諾を出す決定には VP 承認を必須にする。"""
-    return bool(current_app.config.get('WEKO_DAC_VERIFIER_BASE_URL'))
+    """許諾を出す決定に VP 承認(審査者のスマホの署名)を必須にするか(aifs ADR-18)。
+
+    承認の形が ``vp`` で、かつ verifier2 の接続先があるときだけ。既定(``web``)では、管理画面に
+    ログインした審査者の決定で許諾を出す(ADR-16 の VP 承認は設定で戻せるよう残す)。
+    """
+    mode = (current_app.config.get('WEKO_DAC_GRANT_APPROVAL_MODE') or 'web').strip().lower()
+    return mode == 'vp' and bool(current_app.config.get('WEKO_DAC_VERIFIER_BASE_URL'))
 
 
 def _trusted_issuers():
