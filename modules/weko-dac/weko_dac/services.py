@@ -124,6 +124,51 @@ def offer_from_template(dataset_id, template):
 # Application intake (§5.2)
 # --------------------------------------------------------------------------
 
+APPLICATION_PRESENTATION_PURPOSE = 'data-access-application'
+
+
+def _verify_application_presentation(presentation_jws, researcher_sub,
+                                     agent_id):
+    """申請の資格を、Credential Wallet の提示物で確かめる(改版提案 2026-10-07)。
+
+    分冊01 §6.3 の手順 1〜3・5・6 を申請に当てはめる(手順 4 の対象の一致は申請には無い)。
+    提示物の束縛(署名・鮮度・jti・purpose)の不一致は 401 の ``presentation_*``(取り直せば
+    よい)、内容の不合格は 400 ``invalid_evidence``。生の Passport と違い、提示は Credential
+    Wallet の提示履歴に残る(誰が・誰に・いつ出したか)。
+    """
+    from . import presentation as _presentation
+    from .auth import AuthError
+    from .registered import RegError, _visas_from_elements
+    try:
+        meta, elements = _presentation.verify_presentation(
+            presentation_jws,
+            expected_purpose=APPLICATION_PRESENTATION_PURPOSE)
+    except AuthError as err:
+        raise IntakeError(err.status, err.code, err.detail)
+    if researcher_sub and meta.get('sub') and meta['sub'] != researcher_sub:
+        raise IntakeError(400, 'invalid_evidence',
+                          'presentation.sub != token.sub')
+    if meta.get('presented_by') != agent_id:
+        raise IntakeError(400, 'invalid_evidence',
+                          'presented_by != token act.sub')
+    if not elements:
+        raise IntakeError(400, 'invalid_evidence',
+                          'presentation carries no credentials')
+    try:
+        visas, method = _visas_from_elements(elements, researcher_sub)
+    except RegError as err:
+        raise IntakeError(400, 'invalid_evidence', err.detail)
+    return {
+        'result': 'valid',
+        'format': 'presentation',
+        'method': method,
+        'purpose': meta.get('purpose'),
+        'presentation_jti': meta.get('jti'),
+        'visa_types': [v.get('type') for v in visas],
+        'presentation_absent': False,
+    }
+
+
 def _verify_passport(passport_jwt, researcher_sub=None):
     """Verify ``evidence.passport`` — demo IdP signatures only (§5.2-4).
 
@@ -274,10 +319,19 @@ def intake_application(payload, researcher_sub, agent_id):
                               'odrl_request.permission required')
         dataset_results.append(entry)
 
-    # 4. passport verification — demo IdP signatures only (policy (c))
-    passport_result = _verify_passport(
-        (payload.get('evidence') or {}).get('passport') or '',
-        researcher_sub=researcher_sub)
+    # 4. 申請者の資格(改版提案 2026-10-07: controlled の申請に添える資格を提示物に移す)。
+    #    evidence.presentation(Credential Wallet の提示物、purpose=data-access-application)を
+    #    優先し、移行期は evidence.passport(生の Passport)も受理して presentation_absent を
+    #    記録する(分冊01 §6.3 の移行期経路と同じ扱い)。両方あれば presentation だけを見る。
+    evidence = payload.get('evidence') or {}
+    if evidence.get('presentation'):
+        passport_result = _verify_application_presentation(
+            evidence['presentation'], researcher_sub, agent_id)
+    else:
+        passport_result = _verify_passport(
+            evidence.get('passport') or '', researcher_sub=researcher_sub)
+        if isinstance(passport_result, dict):
+            passport_result = dict(passport_result, presentation_absent=True)
 
     # 5. accept
     application = DacApplication(

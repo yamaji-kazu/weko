@@ -85,6 +85,7 @@ PROBLEM_TITLES = {
     'allowlist_misconfigured': '許可リスト設定が不備です',
     'visa_issuer_unconfigured': 'Visa 発行者が未設定です',
     'invalid_passport': 'パスポート／Visa を検証できません',
+    'invalid_evidence': '申請者の資格(提示物)を確かめられません',
     'requires_review': '審査（controlled）が必要です',
     'not_registered': '登録（registered）区分ではありません',
     'access_class_mismatch': 'アクセス区分が一致しません',
