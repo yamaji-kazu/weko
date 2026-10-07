@@ -323,15 +323,17 @@ def intake_application(payload, researcher_sub, agent_id):
     #    evidence.presentation(Credential Wallet の提示物、purpose=data-access-application)を
     #    優先し、移行期は evidence.passport(生の Passport)も受理して presentation_absent を
     #    記録する(分冊01 §6.3 の移行期経路と同じ扱い)。両方あれば presentation だけを見る。
+    #    2026-10-07: 申請側(DG)が提示物に移ったので、生の Passport の受け付けをやめた
+    #    (rdc-aap-v0.5。移行期の受理はここで終わり)。presentation が無ければ理由を添えて拒む。
     evidence = payload.get('evidence') or {}
-    if evidence.get('presentation'):
-        passport_result = _verify_application_presentation(
-            evidence['presentation'], researcher_sub, agent_id)
-    else:
-        passport_result = _verify_passport(
-            evidence.get('passport') or '', researcher_sub=researcher_sub)
-        if isinstance(passport_result, dict):
-            passport_result = dict(passport_result, presentation_absent=True)
+    if not evidence.get('presentation'):
+        raise IntakeError(
+            400, 'presentation_required',
+            'evidence.presentation (Credential Wallet の提示物、purpose='
+            'data-access-application) が必要です。生の Passport '
+            '(evidence.passport) は rdc-aap-v0.5 で受け付けをやめました')
+    passport_result = _verify_application_presentation(
+        evidence['presentation'], researcher_sub, agent_id)
 
     # 5. accept
     application = DacApplication(
