@@ -84,8 +84,9 @@
     },
     "evidence": {
       "type": "object",
-      "required": ["passport"],
+      "anyOf": [{"required": ["presentation"]}, {"required": ["passport"]}],
       "properties": {
+        "presentation": {"type": "string"},
         "passport": {"type": "string"},
         "ethics_approval": {"type": ["object", "null"]},
         "security_measures": {"type": "object"}
