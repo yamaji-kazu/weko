@@ -6,6 +6,7 @@ WEKO の環境なしで走る:
 通るものと同じだけ、拒否されるべきもの(他所宛て・許可していない送信者・別ドメインの参照先・署名の
 無い/別の鍵の資源・中身の食い違い・別の記録の要約)が、拒否の code まで決まって拒否されることを見る。
 """
+import base64
 import json
 import os
 import sys
@@ -14,7 +15,6 @@ import jwt
 import pytest
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import ec
-from jwt.algorithms import ECAlgorithm
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -37,14 +37,19 @@ DG_KEY = _key()
 OTHER_KEY = _key()
 
 
+def _b64(n):
+    return base64.urlsafe_b64encode(n.to_bytes(32, 'big')).rstrip(b'=').decode()
+
+
 def _jwk(k, kid='dg-1'):
-    d = json.loads(ECAlgorithm.to_jwk(k.public_key()))
-    d.update(kid=kid, alg='ES256')
-    return d
+    # WEKO の PyJWT(1.5.3)の to_jwk は EC に対応していないので、公開鍵の数から組む
+    n = k.public_key().public_numbers()
+    return {'kty': 'EC', 'crv': 'P-256', 'x': _b64(n.x), 'y': _b64(n.y), 'kid': kid, 'alg': 'ES256', 'use': 'sig'}
 
 
 def _sign(payload, typ, key=DG_KEY, kid='dg-1'):
-    return jwt.encode(payload, key, algorithm='ES256', headers={'typ': typ, 'kid': kid})
+    t = jwt.encode(payload, key, algorithm='ES256', headers={'typ': typ, 'kid': kid})
+    return t.decode() if isinstance(t, bytes) else t  # PyJWT 1.x は bytes を返す
 
 
 def _rel(**over):

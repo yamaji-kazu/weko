@@ -8,11 +8,12 @@ DG が「このリポジトリのデータセット(主語)は、DG の承認記
 
 HTTP にも DB にも触らない純関数にして、拒否の形を単体で固定する(取得の手段は呼び出し側が渡す)。
 """
-import json
+import base64
 from urllib.parse import urlparse
 
 import jwt
-from jwt.algorithms import ECAlgorithm
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import ec
 
 RELATION_TYP = 'rdc-approval-relation+jwt'
 SUMMARY_TYP = 'rdc-approval-summary+jwt'
@@ -84,6 +85,19 @@ def check_envelope(body, repository_id, allowed_origins):
     return fields, origin
 
 
+def _b64url_int(v):
+    return int.from_bytes(base64.urlsafe_b64decode(v + '=' * (-len(v) % 4)), 'big')
+
+
+def _ec_public_key(jwk):
+    """P-256 の JWK から公開鍵を組む。WEKO の PyJWT(1.5.3)は EC の from_jwk に対応していないので、
+    cryptography で直接組む(auth.jwk_to_public_key と同じやり方)。"""
+    if jwk.get('kty') != 'EC' or jwk.get('crv') != 'P-256':
+        raise ValueError('ES256(P-256)の鍵ではありません')
+    nums = ec.EllipticCurvePublicNumbers(_b64url_int(jwk['x']), _b64url_int(jwk['y']), ec.SECP256R1())
+    return nums.public_key(default_backend())
+
+
 def _verify(token, keys, issuer, typ):
     header = jwt.get_unverified_header(token)
     if header.get('typ') != typ:
@@ -93,7 +107,7 @@ def _verify(token, keys, issuer, typ):
     last = None
     for k in cand:
         try:
-            key = ECAlgorithm.from_jwk(json.dumps(k))
+            key = _ec_public_key(k)
             return jwt.decode(token, key, algorithms=['ES256'], issuer=issuer,
                               options={'verify_aud': False})
         except Exception as ex:  # 次の鍵を試す
