@@ -26,6 +26,8 @@ def init():
         # 許諾の VP 承認(aifs ADR-16)
         models.DacGrantApproval.__table__, models.DacApprovalRecord.__table__,
         models.DacApprovalLog.__table__, models.DacApprovalExplanation.__table__,
+        # ⑤ Announce Relationship(aifs ADR-25)
+        models.DacApprovalRelation.__table__,
     ]
     db.metadata.create_all(bind=db.engine, tables=tables, checkfirst=True)
     click.secho('Tables created (checkfirst).', fg='green')

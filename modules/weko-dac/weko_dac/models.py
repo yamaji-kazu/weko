@@ -323,3 +323,23 @@ class DacApprovalExplanation(db.Model):
     body = db.Column(db.Text, nullable=False)
     digest = db.Column(db.String(64), nullable=False)
     created_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+
+class DacApprovalRelation(db.Model):
+    """⑤ Announce Relationship で受けた関係(aifs ADR-25)。データセットが DG の承認記録の要約から参照される。
+
+    受けるのは、関係の資源と承認記録の要約を DG のドメインから取り直し、DG の署名を確かめたものだけ。
+    """
+
+    __tablename__ = 'dac_approval_relation'
+
+    id = db.Column(db.Integer, primary_key=True)
+    notification_id = db.Column(db.String(255), nullable=False, unique=True)
+    relation_url = db.Column(db.String(1024), nullable=False, unique=True)
+    dataset_uri = db.Column(db.String(1024), nullable=False, index=True)
+    relationship = db.Column(db.String(255), nullable=False)
+    record_url = db.Column(db.String(1024), nullable=False)
+    record_id = db.Column(db.String(64), nullable=False)
+    origin = db.Column(db.String(255), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    received_at = db.Column(db.DateTime, default=_now, nullable=False)

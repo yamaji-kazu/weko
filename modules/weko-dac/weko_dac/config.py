@@ -261,3 +261,13 @@ WEKO_DAC_APPROVAL_SIGNING_KEY_PATH = os.environ.get('WEKO_DAC_APPROVAL_SIGNING_K
 WEKO_DAC_APPROVAL_ISSUER = os.environ.get('WEKO_DAC_APPROVAL_ISSUER', WEKO_DAC_ENTITY_ID)
 #: 提示要求を作ってから確認までの期限(秒)
 WEKO_DAC_GRANT_APPROVAL_TTL = int(os.environ.get('WEKO_DAC_GRANT_APPROVAL_TTL', '3600'))
+
+
+#: ⑤ Announce Relationship(aifs ADR-25)を受ける送信者。JSON の配列 [{"id": DG の Service id, "jwks_uri": DG の
+#: 承認記録の JWKS}]。参照先(関係の資源・承認記録の要約)はこの送信者のドメインから取り直し、この JWKS で
+#: 確かめる。空なら inbox は誰からも受けない。
+WEKO_DAC_INBOX_ALLOWED_ORIGINS = os.environ.get('WEKO_DAC_INBOX_ALLOWED_ORIGINS', '[]')
+
+#: 送信者のドメインの取得の接続先の差し替え(JSON の {"https://dg.example": "https://10.0.0.1"})。識別子(URL の
+#: ホスト名)は保ったまま、接続先だけ替える。mdx の ACL でグローバル IP 同士が張れないため。
+WEKO_DAC_INBOX_CONNECT_MAP = os.environ.get('WEKO_DAC_INBOX_CONNECT_MAP', '{}')

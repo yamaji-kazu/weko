@@ -17,8 +17,9 @@ from . import (allowlist, audit, matching, presentation, registered, services,
                signing)
 from .auth import (AuthError, jwk_to_public_key, problem_title, problem_type,
                    require_rags_token, verify_jws)
-from .models import (DacAgreement, DacApplication, DacMessage, DacOffer,
-                     DacPresentationJti, DacVisa)
+from .models import (DacAgreement, DacApplication, DacApprovalRelation,
+                     DacMessage, DacOffer, DacPresentationJti, DacVisa)
+from . import relations as _relations
 
 blueprint_wellknown = Blueprint('weko_dac_wellknown', __name__, template_folder='templates')
 
@@ -815,3 +816,87 @@ def download():
         return send_file(uri, as_attachment=True)
     except Exception as ex:
         return _problem(500, 'delivery_failed', str(ex))
+
+
+# --------------------------------------------------------------------------
+# ⑤ Announce Relationship の受け口(承認プロファイル §3・R3-3・R6-1、aifs ADR-25)
+# --------------------------------------------------------------------------
+
+def _json_config(name, default):
+    raw = current_app.config.get(name, default)
+    if isinstance(raw, (list, dict)):
+        return raw
+    try:
+        return json.loads(raw or default)
+    except ValueError:
+        current_app.logger.warning('%s が JSON ではありません', name)
+        return json.loads(default)
+
+
+def _inbox_get(url, accept):
+    """送信者のドメインから取り直す。識別子(ホスト名)は保ち、接続先だけ設定で差し替える。"""
+    import requests
+    from .auth import _requests_verify
+    headers = {'Accept': accept}
+    target = url
+    for ident, connect in _json_config('WEKO_DAC_INBOX_CONNECT_MAP', '{}').items():
+        if url.startswith(ident.rstrip('/') + '/'):
+            target = connect.rstrip('/') + url[len(ident.rstrip('/')):]
+            headers['Host'] = _relations.urlparse(ident).netloc
+            break
+    resp = requests.get(target, headers=headers, timeout=10, verify=_requests_verify())
+    resp.raise_for_status()
+    return resp
+
+
+@blueprint_api.route('/inbox', methods=['POST'])
+def inbox_receive():
+    """LDN の受け口。受けるのは ⑤ Announce Relationship だけ。参照先を確かめたものだけ記録する。"""
+    body = request.get_json(force=True, silent=True)
+    repo = current_app.config.get('WEKO_DAC_ENTITY_ID')
+    allowed = _json_config('WEKO_DAC_INBOX_ALLOWED_ORIGINS', '[]')
+    try:
+        fields, origin = _relations.check_envelope(body, repo, allowed)
+        row, _ = _find_offer(fields['subject'])
+        if row is None or row.dataset_id != fields['subject']:
+            raise _relations.RelationReject(404, 'unknown_dataset', 'このリポジトリが方針を持つデータセットではありません')
+        if DacApprovalRelation.query.filter(
+                (DacApprovalRelation.notification_id == fields['id'])
+                | (DacApprovalRelation.relation_url == fields['relation_url'])).first():
+            raise _relations.RelationReject(409, 'duplicate', 'この関係はすでに受け取っています')
+        rel = _relations.verify_references(
+            fields, origin, repo,
+            fetch_text=lambda u: _inbox_get(u, 'application/jwt').text,
+            fetch_keys=lambda u: _inbox_get(u, 'application/json').json().get('keys', []))
+    except _relations.RelationReject as e:
+        current_app.logger.info('⑤ を受けない: %s %s', e.code, e.detail)
+        return _problem(e.status, e.code, e.detail)
+    rec = DacApprovalRelation(
+        notification_id=fields['id'], relation_url=fields['relation_url'], dataset_uri=fields['subject'],
+        relationship=fields['relationship'], record_url=fields['record_url'], record_id=rel['record_id'],
+        origin=origin['id'], body=json.dumps(body, ensure_ascii=False))
+    db.session.add(rec)
+    try:
+        db.session.commit()
+    except Exception:  # 同時に 2 通来た
+        db.session.rollback()
+        return _problem(409, 'duplicate', 'この関係はすでに受け取っています')
+    resp = jsonify({'accepted': True, 'notification_id': fields['id']})
+    resp.status_code = 201
+    resp.headers['Location'] = '%s/api/dac/v1/datasets/%s/approval-relations' % (
+        (repo or '').rstrip('/'), fields['subject'])
+    return resp
+
+
+@blueprint_api.route('/datasets/<path:dataset_id>/approval-relations', methods=['GET'])
+def approval_relations(dataset_id):
+    """データセットが参照される承認記録(公開要約の URL だけ。R9-6)。告知の後に取り消された承認は通知では
+    伝わらないので、使う側は要約を取り直して確かめる(承認プロファイル P7)。"""
+    row, canonical = _find_offer(dataset_id)
+    if row is None:
+        return _problem(404, 'unknown_dataset', 'No policy registered for %s' % canonical)
+    rows = DacApprovalRelation.query.filter_by(dataset_uri=row.dataset_id).order_by(
+        DacApprovalRelation.received_at.desc()).limit(200).all()
+    return jsonify({'dataset': row.dataset_id, 'relations': [
+        {'relationship': r.relationship, 'record': r.record_url, 'origin': r.origin,
+         'received_at': r.received_at.isoformat() + 'Z'} for r in rows]})
