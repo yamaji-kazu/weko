@@ -11,7 +11,7 @@ from flask_babelex import gettext as _
 from flask_login import current_user
 from invenio_db import db
 
-from . import services
+from . import i18n, services
 from .assessment import generate_assessment
 from .models import (DacApplication, DacAssessment, DacDecision,
                      DacMessage, DacOffer)
@@ -26,6 +26,12 @@ class _OfficerView(BaseView):
 
     def inaccessible_callback(self, name, **kwargs):
         abort(403)
+
+    def render(self, template, **kwargs):
+        """画面の文言を WEKO の言語切替に合わせる (``tr`` / ``trl``、i18n.py)。"""
+        for k, v in i18n.template_helpers().items():
+            kwargs.setdefault(k, v)
+        return super(_OfficerView, self).render(template, **kwargs)
 
 
 class DacApplicationView(_OfficerView):

@@ -95,6 +95,71 @@ PROBLEM_TITLES = {
 }
 
 
+# English ``title`` for each code (London demo, 2026-10). Chosen only when
+# the request asks for English via Accept-Language (i18n.api_lang); DG / DR
+# call without the header and keep receiving the Japanese titles above.
+# ``code``, ``type`` and the response shape never depend on the language.
+PROBLEM_TITLES_EN = {
+    'unsupported_key': 'Unsupported key type',
+    'invalid_token': 'Invalid token',
+    'token_expired': 'Token has expired',
+    'missing_token': 'Authentication token is missing',
+    'server_misconfigured': 'Server is misconfigured',
+    'insufficient_scope': 'Insufficient scope',
+    'delegation_required': 'Delegation (agent) is required',
+    'key_unavailable': 'Signing key is unavailable',
+    'unknown_dataset': 'Dataset not found',
+    'missing_dataset_id': 'dataset_id is not specified',
+    'unknown_visa': 'Visa not found',
+    'invalid_application': 'Invalid application',
+    'invalid_odrl': 'Invalid ODRL description',
+    'unknown_application': 'Application not found',
+    'no_agreement': 'No Agreement has been issued',
+    'invalid_message': 'Invalid message',
+    'negotiation_limit': 'Negotiation limit reached',
+    'illegal_state': 'Not allowed in the current state',
+    'presentation_required': 'Grant Presentation is required',
+    'no_distribution': 'Distribution not found',
+    'not_open': 'Not in the open access class',
+    'delivery_failed': 'Delivery failed',
+    'invalid_download_token': 'Invalid download token',
+    'invalid_presentation': 'Invalid presentation',
+    'unsupported_presentation_type': 'Unsupported presentation type',
+    'wallet_not_configured': 'Wallet is not configured',
+    'unknown_wallet': 'Unknown wallet',
+    'presentation_expired': 'Presentation has expired',
+    'presentation_replayed': 'Presentation was replayed',
+    'presentation_delegation_mismatch':
+        'Presentation exceeds the scope of the delegation',
+    'presentation_delegation_missing':
+        'Delegation claim is missing on a route that requires delegation',
+    'presentation_purpose_mismatch':
+        'Presentation purpose does not match the route',
+    'delegation_type_unsupported': 'Unsupported delegation type',
+    'resource_embargoed': 'Resource is under embargo (not yet public)',
+    'delegation_verifier_unconfigured':
+        'Verification key for delegation receipts is not configured',
+    'agent_not_allowlisted': 'Agent is not on the allowlist',
+    'visa_expired': 'Visa has expired',
+    'invalid_visa': 'Invalid Visa',
+    'visa_revoked_or_unknown': 'Visa is revoked or unknown',
+    'visa_dataset_mismatch': 'Visa does not match the dataset',
+    'subject_mismatch': 'Subject does not match',
+    'agent_mismatch': 'Agent does not match',
+    'allowlist_misconfigured': 'Allowlist is misconfigured',
+    'visa_issuer_unconfigured': 'Visa issuer is not configured',
+    'invalid_passport': 'Passport / Visa could not be verified',
+    'invalid_evidence':
+        "Applicant's credentials (presentation) could not be verified",
+    'requires_review': 'Review (controlled access) is required',
+    'not_registered': 'Not in the registered access class',
+    'access_class_mismatch': 'Access class does not match',
+    'purpose_not_permitted': 'Purpose of use is not permitted',
+    'issuer_not_authorized': 'Issuer is not authorized',
+    'requirements_not_met': 'Credential requirements are not met',
+}
+
+
 def problem_type(code):
     """RFC 9457 ``type`` URI for a machine code (RDC-AAP-01 §5.8.2).
 
@@ -112,8 +177,12 @@ def problem_type(code):
 
 def problem_title(code):
     """Human-readable ``title`` for a machine code — never the raw code."""
+    from .i18n import api_lang
+    english = api_lang() == 'en'
     if not code:
-        return 'エラー'
+        return 'Error' if english else 'エラー'
+    if english and code in PROBLEM_TITLES_EN:
+        return PROBLEM_TITLES_EN[code]
     return PROBLEM_TITLES.get(code, code.replace('_', ' '))
 
 

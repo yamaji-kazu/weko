@@ -1,32 +1,32 @@
 {% extends 'admin/master.html' %}
 {% block body %}
-<h2>申請 {{ application.application_id }}
+<h2>{{ tr('申請') }} {{ application.application_id }}
   <small><span class="label label-info">{{ application.status }}</span></small>
 </h2>
 <p>
-  <a href="{{ url_for('.index') }}">&larr; 一覧へ戻る</a>
+  <a href="{{ url_for('.index') }}">&larr; {{ tr('一覧へ戻る') }}</a>
 </p>
 
 <div class="row">
   <div class="col-md-6">
-    <h4>申請内容 (エンベロープ)</h4>
+    <h4>{{ tr('申請内容 (エンベロープ)') }}</h4>
     <pre style="max-height:420px;overflow:auto;">{{ payload_json }}</pre>
     {% if application.madmp_id %}
     <p>maDMP: <a href="{{ application.madmp_id }}" target="_blank" rel="noopener">{{ application.madmp_id }}</a></p>
     {% endif %}
   </div>
   <div class="col-md-6">
-    <h4>審査パッケージ (Assessment)
+    <h4>{{ tr('審査パッケージ (Assessment)') }}
       <form method="post" action="{{ url_for('.refresh_assessment', app_id=application.application_id) }}" style="display:inline;">
-        <button class="btn btn-xs btn-default" type="submit">再生成</button>
+        <button class="btn btn-xs btn-default" type="submit">{{ tr('再生成') }}</button>
       </form>
     </h4>
     {% set reco = assessment.assessment.get('recommendation', {}) %}
     <p>
-      推奨判定: <strong>{{ reco.get('decision', '-') }}</strong>
+      {{ tr('推奨判定:') }} <strong>{{ reco.get('decision', '-') }}</strong>
       (confidence {{ reco.get('confidence', '-') }})<br>
-      根拠: {{ reco.get('rationale', '') }}
-      {% if reco.get('conditions') %}<br>推奨付帯条件: {{ reco.get('conditions') | join(' / ') }}{% endif %}
+      {{ tr('根拠:') }} {{ reco.get('rationale', '') }}
+      {% if reco.get('conditions') %}<br>{{ tr('推奨付帯条件:') }} {{ trl(reco.get('conditions')) | join(' / ') }}{% endif %}
     </p>
     <pre style="max-height:360px;overflow:auto;">{{ assessment_json }}</pre>
   </div>
@@ -34,7 +34,7 @@
 
 <div class="row">
   <div class="col-md-6">
-    <h4>照会メッセージ</h4>
+    <h4>{{ tr('照会メッセージ') }}</h4>
     <ul class="list-group" style="max-height:260px;overflow:auto;">
       {% for m in messages %}
       <li class="list-group-item">
@@ -43,90 +43,90 @@
         {{ m.body }}
       </li>
       {% else %}
-      <li class="list-group-item">メッセージなし</li>
+      <li class="list-group-item">{{ tr('メッセージなし') }}</li>
       {% endfor %}
     </ul>
-    <h4>決裁履歴</h4>
+    <h4>{{ tr('決裁履歴') }}</h4>
     <ul class="list-group">
       {% for d in decisions %}
       <li class="list-group-item">
         <strong>{{ d.decision }}</strong> — {{ d.decided_by }}
         ({{ d.decided_at.strftime('%Y-%m-%d %H:%M') }})
-        {% if d.diverges_from_ai %}<span class="label label-warning">AI推奨と相違</span>{% endif %}<br>
-        理由: {{ d.reason }}
+        {% if d.diverges_from_ai %}<span class="label label-warning">{{ tr('AI推奨と相違') }}</span>{% endif %}<br>
+        {{ tr('理由:') }} {{ d.reason }}
       </li>
       {% else %}
-      <li class="list-group-item">決裁なし</li>
+      <li class="list-group-item">{{ tr('決裁なし') }}</li>
       {% endfor %}
     </ul>
   </div>
   <div class="col-md-6">
     {% if grant_approvals %}
-    <h4>許諾の署名(審査者の VP)</h4>
+    <h4>{{ tr('許諾の署名(審査者の VP)') }}</h4>
     <ul class="list-group">
       {% for g in grant_approvals %}
       <li class="list-group-item">
-        <strong>{{ g.decision }}</strong> — {{ g.officer_id }} — 状態: <code>{{ g.state }}</code>
+        <strong>{{ g.decision }}</strong> — {{ g.officer_id }} — {{ tr('状態:') }} <code>{{ g.state }}</code>
         ({{ g.created_at.strftime('%Y-%m-%d %H:%M') }})<br>
         {% if g.state == 'pending' %}
         {% if grant_qr_urls.get(g.subject_id) %}
         <div style="display:flex; align-items:center; gap:12px; margin:6px 0">
-          <div class="rdc-qr" data-url="{{ grant_qr_urls[g.subject_id] }}" aria-label="署名用の QR コード"
+          <div class="rdc-qr" data-url="{{ grant_qr_urls[g.subject_id] }}" aria-label="{{ tr('署名用の QR コード') }}"
                style="background:#fff; padding:8px; border:1px solid #ddd"></div>
-          <div>スマホの学認ウォレット(GakuNin WALLET)でこの QR コードを読み取り、審査者の VC で取引に署名してください。</div>
+          <div>{{ tr('スマホの学認ウォレット(GakuNin WALLET)でこの QR コードを読み取り、審査者の VC で取引に署名してください。') }}</div>
         </div>
         {% endif %}
-        ウォレットで次の提示要求に応え、審査者の VC で取引に署名してください(スマホでこの画面を開いているときは、タップするとウォレットが開きます):<br>
+        {{ tr('ウォレットで次の提示要求に応え、審査者の VC で取引に署名してください(スマホでこの画面を開いているときは、タップするとウォレットが開きます):') }}<br>
         <a href="{{ g.authorization_request_url }}"><code style="word-break: break-all">{{ g.authorization_request_url }}</code></a>
         <form method="post" action="{{ url_for('.confirm_grant_approval', app_id=application.application_id, subject_id=g.subject_id) }}">
           {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
-          <button type="submit" class="btn btn-primary btn-sm">署名を確認して許諾を確定</button>
+          <button type="submit" class="btn btn-primary btn-sm">{{ tr('署名を確認して許諾を確定') }}</button>
         </form>
         {% elif g.record_id %}
-        承認記録: <a href="/api/dac/v1/approvals/{{ g.record_id }}">{{ g.record_id }}</a>
+        {{ tr('承認記録:') }} <a href="/api/dac/v1/approvals/{{ g.record_id }}">{{ g.record_id }}</a>
         {% endif %}
       </li>
       {% endfor %}
     </ul>
     {% endif %}
-    <h4>決裁</h4>
+    <h4>{{ tr('決裁') }}</h4>
     {% if application.status in ['under_review', 'needs_info'] %}
     <form method="post" action="{{ url_for('.decision', app_id=application.application_id) }}">
       <div class="form-group">
-        <label>判定</label>
+        <label>{{ tr('判定') }}</label>
         <select name="decision" class="form-control">
-          <option value="approve">approve (承認)</option>
-          <option value="approve_with_conditions">approve_with_conditions (条件付き承認)</option>
-          <option value="reject">reject (却下)</option>
-          <option value="request_info">request_info (照会)</option>
+          <option value="approve">{{ tr('approve (承認)') }}</option>
+          <option value="approve_with_conditions">{{ tr('approve_with_conditions (条件付き承認)') }}</option>
+          <option value="reject">{{ tr('reject (却下)') }}</option>
+          <option value="request_info">{{ tr('request_info (照会)') }}</option>
         </select>
       </div>
       <div class="form-group">
-        <label>理由 (必須)</label>
+        <label>{{ tr('理由 (必須)') }}</label>
         <textarea name="reason" class="form-control" rows="3" required></textarea>
       </div>
       <div class="form-group">
-        <label>付帯条件 (1行1件 / 条件付き承認時)</label>
+        <label>{{ tr('付帯条件 (1行1件 / 条件付き承認時)') }}</label>
         <textarea name="conditions" class="form-control" rows="2"></textarea>
       </div>
       <div class="form-group">
-        <label>照会文 (request_info時。空なら理由を送信)</label>
+        <label>{{ tr('照会文 (request_info時。空なら理由を送信)') }}</label>
         <textarea name="inquiry_body" class="form-control" rows="2"></textarea>
       </div>
       <button type="submit" class="btn btn-primary"
-              onclick="return confirm('この判定を確定しますか?');">決裁を確定</button>
+              onclick="return confirm('{{ tr('この判定を確定しますか?') }}');">{{ tr('決裁を確定') }}</button>
     </form>
     {% elif application.status == 'active' %}
     <form method="post" action="{{ url_for('.revoke', app_id=application.application_id) }}">
       <div class="form-group">
-        <label>取消理由 (必須)</label>
+        <label>{{ tr('取消理由 (必須)') }}</label>
         <textarea name="reason" class="form-control" rows="2" required></textarea>
       </div>
       <button type="submit" class="btn btn-danger"
-              onclick="return confirm('許諾を取り消しますか? 発行済みVisaは失効します。');">許諾を取消 (revoke)</button>
+              onclick="return confirm('{{ tr('許諾を取り消しますか? 発行済みVisaは失効します。') }}');">{{ tr('許諾を取消 (revoke)') }}</button>
     </form>
     {% else %}
-    <p>状態 {{ application.status }} では決裁操作はできません。</p>
+    <p>{{ tr('状態 %(s)s では決裁操作はできません。', s=application.status) }}</p>
     {% endif %}
   </div>
 </div>
