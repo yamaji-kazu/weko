@@ -247,6 +247,10 @@ def resolve_user(claims):
     email = (claims.get('email') or '').strip().lower()
     if not email:
         raise PreprintReject(400, 'email_missing', 'トークンにメールアドレスがありません')
+    # メールで利用者を作るのは、IdP がメールの到達を確かめた人だけ(aifs ADR-38 §5)。確かめていないメールで作ると、
+    # 他人のメールの名義の利用者ができる。realm でも確認を必須にしているが、受け口はそれに頼らない
+    if claims.get('email_verified') is not True:
+        raise PreprintReject(403, 'email_unverified', 'IdP でメールアドレスが確認されていません(WEKO の利用者を作れません)')
     if User.query.filter(db.func.lower(User.email) == email).first():
         raise PreprintReject(409, 'weko_account_conflict', '同じメールの WEKO の利用者が、別にあります(結びません)')
     user = current_datastore.create_user(email=email, active=True, password=None,

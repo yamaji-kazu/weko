@@ -208,7 +208,7 @@ def main():
         assert r.status_code == 200, f"Token Exchange に失敗: {r.status_code} {r.text[:300]}"
         dt1 = r.json()["access_token"]
         c = jwt.decode(dt1, options={"verify_signature": False})
-        print(f"委任のトークン: sub={c['sub'][:8]}… act={c.get('act')} aud={c.get('aud')} scope={c.get('scope')}")
+        print(f"委任のトークン: sub={c['sub'][:8]}… act={c.get('act')} aud={c.get('aud')} scope={c.get('scope')} email_verified={c.get('email_verified')}")
         sub1 = c["sub"]
 
         paper = b"%PDF-1.4\n% RDC preprint test " + secrets.token_hex(8).encode() + b"\n%%EOF\n"
@@ -291,6 +291,22 @@ def main():
         n3 = psql(f"select count(*) from dac_idp_user where sub='{sub3}';")
         ok = n3 == "0"; results.append(ok)
         print(f"{'PASS' if ok else 'FAIL'}  食い違いのとき、結びつきを作らない({n3} 件)")
+        # IdP でメールを確かめていない本人(aifs ADR-38 §5)。realm は未確認の利用者にトークンを出さないので、確認済みで
+        # 本人のトークンを取ってから未確認に戻し、交換する(交換は、その時点の利用者の状態で中身を作る)
+        u4, pw4, id4 = make_idp_user("weko-pre"); users.append(id4)
+        ut4 = user_token(u4, pw4)
+        sh(f"bash -c '{KC} update users/{id4} -r rdc -s emailVerified=false'")
+        dt4 = exchange(ut4, secret).json()["access_token"]
+        c4 = jwt.decode(dt4, options={"verify_signature": False})
+        sub4 = c4["sub"]
+        ok = c4.get("email_verified") is False; results.append(ok)
+        print(f"{'PASS' if ok else 'FAIL'}  前提: 未確認に戻した本人の委任のトークンの email_verified={c4.get('email_verified')}")
+        t4 = tx(); t4["responsible"] = {"id": f"urn:rdc:holder:{sub4}"}; t4 = enc(t4)
+        check("IdP でメールを確かめていない本人", post(dt4, t4, record(t4, responsible=sub4)), 403, "email_unverified")
+        n4 = psql(f"select count(*) from dac_idp_user where sub='{sub4}';")
+        m4 = psql(f"select count(*) from accounts_user where lower(email)='{u4}@example.invalid';")
+        ok = n4 == "0" and m4 == "0"; results.append(ok)
+        print(f"{'PASS' if ok else 'FAIL'}  未確認のとき、WEKO の利用者も結びつきも作らない(利用者 {m4} 件・結びつき {n4} 件)")
 
         # ── 許すべきもの ──
         rec = record(good)
