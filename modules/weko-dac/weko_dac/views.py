@@ -900,3 +900,12 @@ def approval_relations(dataset_id):
     return jsonify({'dataset': row.dataset_id, 'relations': [
         {'relationship': r.relationship, 'record': r.record_url, 'origin': r.origin,
          'received_at': r.received_at.isoformat() + 'Z'} for r in rows]})
+
+
+@blueprint_api.route('/preprints', methods=['POST'])
+def deposit_preprint():
+    """研究者の AI エージェントによるプレプリントの登録(aifs ADR-37)。確かめと登録は preprint.py"""
+    from .preprint import deposit
+    if not current_app.config.get('WEKO_DAC_PREPRINT_ENABLED'):
+        return _problem(404, 'not_enabled', 'プレプリントの登録は有効になっていません')
+    return deposit()

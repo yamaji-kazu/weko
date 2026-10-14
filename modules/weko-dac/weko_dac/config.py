@@ -271,3 +271,19 @@ WEKO_DAC_INBOX_ALLOWED_ORIGINS = os.environ.get('WEKO_DAC_INBOX_ALLOWED_ORIGINS'
 #: 送信者のドメインの取得の接続先の差し替え(JSON の {"https://dg.example": "https://10.0.0.1"})。識別子(URL の
 #: ホスト名)は保ったまま、接続先だけ替える。mdx の ACL でグローバル IP 同士が張れないため。
 WEKO_DAC_INBOX_CONNECT_MAP = os.environ.get('WEKO_DAC_INBOX_CONNECT_MAP', '{}')
+
+# ── プレプリントの登録(aifs ADR-37)。研究者の AI エージェントが、委任のトークンと承認記録で登録する ──
+WEKO_DAC_PREPRINT_ENABLED = False
+WEKO_DAC_PREPRINT_AUDIENCE = 'weko'
+WEKO_DAC_PREPRINT_SCOPE = 'weko:deposit'
+WEKO_DAC_PREPRINT_AGENTS = ['https://dg.nii-rdc.mydns.jp/agents/pub-001']
+# 承認記録の発行者 → 公開鍵の場所(OJS の受け口と同じ)
+WEKO_DAC_PREPRINT_APPROVAL_ISSUERS = {
+    'https://dg.nii-rdc.mydns.jp': 'https://dg.nii-rdc.mydns.jp/api/approvals/jwks',
+}
+WEKO_DAC_PREPRINT_TXDATA_TYPES = ['urn:rdc:txdata:manuscript-submission:2']
+WEKO_DAC_PREPRINT_REPOSITORY = 'https://db.nii-rdc.mydns.jp'
+WEKO_DAC_PREPRINT_INDEX_ID = 1791972117955
+WEKO_DAC_PREPRINT_MAPPING_ID = 30002
+WEKO_DAC_PREPRINT_LICENSE = 'CC-BY-4.0'
+WEKO_DAC_PREPRINT_ROLE = 'Contributor'

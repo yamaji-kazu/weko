@@ -28,6 +28,8 @@ def init():
         models.DacApprovalLog.__table__, models.DacApprovalExplanation.__table__,
         # ⑤ Announce Relationship(aifs ADR-25)
         models.DacApprovalRelation.__table__,
+        # プレプリントの登録(aifs ADR-37)
+        models.DacPreprintJti.__table__, models.DacIdpUser.__table__,
     ]
     db.metadata.create_all(bind=db.engine, tables=tables, checkfirst=True)
     click.secho('Tables created (checkfirst).', fg='green')

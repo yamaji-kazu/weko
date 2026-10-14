@@ -343,3 +343,23 @@ class DacApprovalRelation(db.Model):
     origin = db.Column(db.String(255), nullable=False)
     body = db.Column(db.Text, nullable=False)
     received_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+
+class DacPreprintJti(db.Model):
+    """プレプリントの登録に使った承認記録(aifs ADR-37)。同じ承認記録での登録は 1 回だけ。"""
+
+    __tablename__ = 'dac_preprint_jti'
+
+    jti = db.Column(db.String(128), primary_key=True)
+    sub = db.Column(db.String(255), nullable=True)
+    used_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+
+class DacIdpUser(db.Model):
+    """IdP の本人(sub)と WEKO の利用者の結びつき(aifs ADR-37)。プレプリントを本人の名で登録するため。"""
+
+    __tablename__ = 'dac_idp_user'
+
+    sub = db.Column(db.String(255), primary_key=True)
+    user_id = db.Column(db.Integer, nullable=False, unique=True)
+    linked_at = db.Column(db.DateTime, default=_now, nullable=False)
