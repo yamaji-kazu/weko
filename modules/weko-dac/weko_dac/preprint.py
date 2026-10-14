@@ -208,8 +208,9 @@ def check_binding(tx, bag_dir, crate):
                     h.update(b)
             got[os.path.relpath(p, data)] = h.hexdigest()
     if got != want:
+        diff = sorted(set(got.items()) ^ set(want.items()), key=str)[:5]
         raise PreprintReject(409, 'files_mismatch', '包みのファイルが、承認されたものと違います(%s)'
-                             % ', '.join(sorted(set(got.items()) ^ set(want.items()), key=str)[:5]))
+                             % ', '.join('%s:%s' % (n, (h or '')[:12]) for n, h in diff))
     files = [e for e in graph if e.get('@type') == 'File']
     if any(e.get('license') != 'license_0' for e in files):
         raise PreprintReject(409, 'license_mismatch', 'RO-Crate のファイルのライセンスが CC BY 4.0(license_0)ではありません')
@@ -235,7 +236,8 @@ def resolve_user(claims):
     """IdP の sub に結んだ WEKO の利用者。無ければトークンの氏名・メールで作り、投稿者(Contributor)の役割を付ける。
     同じメールの WEKO の利用者が別にいれば、作りも結びもせず断る(メールだけで結ぶと、他人の利用者を乗っ取れる。ADR-35 §9)"""
     from invenio_accounts.models import Role, User
-    from invenio_accounts.proxies import current_datastore
+    # WEKO の invenio-accounts は古く、proxies に current_datastore が無い(2026-10-14)。Flask-Security の拡張から取る
+    current_datastore = current_app.extensions['security'].datastore
     link = DacIdpUser.query.get(claims['sub'])
     if link:
         user = User.query.get(link.user_id)
