@@ -16,6 +16,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -45,6 +46,20 @@ class PreprintReject(Exception):
 
 def _cfg(name, default=None):
     return current_app.config.get('WEKO_DAC_PREPRINT_' + name, default)
+
+
+def parse_iso8601(s):
+    """2026-10-15T08:24:07.336Z / +09:00 などを、UTC の datetime にする。WEKO の Python は 3.6 で fromisoformat が無い"""
+    m = re.match(r'^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(\.\d+)?(Z|[+-]\d\d:?\d\d)?$', (s or '').strip())
+    if not m:
+        raise ValueError('ISO 8601 ではありません: %r' % s)
+    dt = datetime.strptime(m.group(1), '%Y-%m-%dT%H:%M:%S').replace(tzinfo=timezone.utc)
+    tz = m.group(3)
+    if tz and tz != 'Z':
+        sign = 1 if tz[0] == '+' else -1
+        hh, mm = int(tz[1:3]), int(tz[-2:])
+        dt = dt - sign * timedelta(hours=hh, minutes=mm)
+    return dt
 
 
 def b64url(raw):
@@ -152,7 +167,7 @@ def open_transaction(encoded, rec):
     na = tx.get('not_after')
     if na:
         try:
-            if datetime.fromisoformat(na.replace('Z', '+00:00')) < datetime.now(timezone.utc):
+            if parse_iso8601(na) < datetime.now(timezone.utc):
                 raise PreprintReject(403, 'approval_expired', '承認の期限を過ぎています')
         except ValueError:
             raise PreprintReject(400, 'transaction_incomplete', '承認の期限が読めません')
