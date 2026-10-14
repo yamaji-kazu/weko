@@ -95,6 +95,19 @@ def _issuer_keys(url):
     return keys
 
 
+def _approval_issuers():
+    """承認記録の発行者 → 公開鍵の場所。設定に加え、WEKO_DAC_PREPRINT_APPROVAL_ISSUERS_FILE(JSON)があれば足す。
+    試験のあいだだけ試験用の発行者を足すため(WEKO を作り直さずに済む。OJS の受け口と同じ形)"""
+    out = dict(_cfg('APPROVAL_ISSUERS') or {})
+    path = _cfg('APPROVAL_ISSUERS_FILE')
+    if path and os.path.exists(path):
+        try:
+            out.update(json.load(open(path, encoding='utf-8')))
+        except Exception:
+            current_app.logger.warning('preprint: 発行者のファイルが読めません: %s', path)
+    return out
+
+
 def verify_approval(jws, sub):
     """DG の承認記録(完全記録の ES256 の JWS)を確かめる。スマホで承認したもの(txdata_hash あり)だけを受ける。"""
     if not jws or jws.count('.') != 2:
@@ -104,7 +117,7 @@ def verify_approval(jws, sub):
         unverified = json.loads(_b64url_decode(jws.split('.')[1]))
     except Exception:
         raise PreprintReject(403, 'approval_invalid', '承認記録の形が違います')
-    url = (_cfg('APPROVAL_ISSUERS') or {}).get(unverified.get('iss') or '')
+    url = _approval_issuers().get(unverified.get('iss') or '')
     if not url:
         raise PreprintReject(403, 'approval_invalid', '承認記録の発行者を信頼していません')
     try:

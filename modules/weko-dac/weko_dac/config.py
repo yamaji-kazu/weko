@@ -281,6 +281,8 @@ WEKO_DAC_PREPRINT_AGENTS = ['https://dg.nii-rdc.mydns.jp/agents/pub-001']
 WEKO_DAC_PREPRINT_APPROVAL_ISSUERS = {
     'https://dg.nii-rdc.mydns.jp': 'https://dg.nii-rdc.mydns.jp/api/approvals/jwks',
 }
+# 試験のあいだだけ発行者を足すファイル(JSON の {iss: jwks_url})。無ければ読まない
+WEKO_DAC_PREPRINT_APPROVAL_ISSUERS_FILE = '/code/scripts/rdc-preprint-test-issuers.json'
 WEKO_DAC_PREPRINT_TXDATA_TYPES = ['urn:rdc:txdata:manuscript-submission:2']
 WEKO_DAC_PREPRINT_REPOSITORY = 'https://db.nii-rdc.mydns.jp'
 WEKO_DAC_PREPRINT_INDEX_ID = 1791972117955
