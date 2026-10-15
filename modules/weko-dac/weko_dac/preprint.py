@@ -233,7 +233,8 @@ def release_approval(rec):
 # ───────────────────────── 本人の WEKO の利用者 ─────────────────────────
 
 def resolve_user(claims):
-    """IdP の sub に結んだ WEKO の利用者。無ければトークンの氏名・メールで作り、投稿者(Contributor)の役割を付ける。
+    """IdP の sub に結んだ WEKO の利用者。無ければ、WEKO に SAML でログインして作られた本人の利用者を eduID で引き、
+    それも無ければトークンの氏名・メールで作り、投稿者(Contributor)の役割を付ける。
     同じメールの WEKO の利用者が別にいれば、作りも結びもせず断る(メールだけで結ぶと、他人の利用者を乗っ取れる。ADR-35 §9)"""
     from invenio_accounts.models import Role, User
     # WEKO の invenio-accounts は古く、proxies に current_datastore が無い(2026-10-14)。Flask-Security の拡張から取る
@@ -243,6 +244,20 @@ def resolve_user(claims):
         user = User.query.get(link.user_id)
         if not user or not user.active:
             raise PreprintReject(403, 'weko_account_disabled', '本人の WEKO の利用者が無効です')
+        return user, False
+    # WEKO に SAML でログインして先に作られた本人の利用者は、eduID(IdP が WEKO に eppn として渡す恒久 ID、
+    # aifs ADR-37 §12)で引いて結ぶ。メールではないので、他人の利用者は名乗れない
+    from weko_accounts.models import ShibbolethUser
+    eduid = (claims.get('eduid') or '').strip()
+    shib = ShibbolethUser.query.filter_by(shib_eppn=eduid).one_or_none() if eduid else None
+    if shib and shib.weko_user:
+        user = shib.weko_user
+        if DacIdpUser.query.filter_by(user_id=user.id).first():
+            raise PreprintReject(409, 'weko_account_conflict', '本人の eduID の WEKO の利用者は、別の IdP の利用者に結ばれています')
+        if not user.active:
+            raise PreprintReject(403, 'weko_account_disabled', '本人の WEKO の利用者が無効です')
+        db.session.add(DacIdpUser(sub=claims['sub'], user_id=user.id))
+        db.session.commit()
         return user, False
     email = (claims.get('email') or '').strip().lower()
     if not email:
@@ -260,6 +275,9 @@ def resolve_user(claims):
         current_datastore.add_role_to_user(user, role)
     db.session.flush()
     db.session.add(DacIdpUser(sub=claims['sub'], user_id=user.id))
+    # 後で本人が WEKO に SAML でログインしたときに、この利用者に入るよう、eduID の結びつきも置く
+    if eduid:
+        ShibbolethUser.create(user, shib_eppn=eduid, shib_mail=email)
     db.session.commit()
     return user, True
 

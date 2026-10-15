@@ -6,7 +6,7 @@
 - IdP に一時の利用者を作り、本人のトークンを dg-portal で取り、投稿エージェント(pub-agent)が weko:deposit で交換する
 - 承認記録は試験用の鍵で署名する(DG の本物の鍵は使わない — それは本物の承認記録の偽造になる)。試験のあいだだけ、
   WEKO の web のコンテナの中に公開鍵を置く小さな HTTP サーバを立て、発行者のファイルに試験用の発行者を足す
-- 終わったら、作ったアイテムを消し(soft delete)、WEKO の利用者を無効にして結びつきを消し、IdP の利用者を消し、
+- 終わったら、作ったアイテムを消し(soft delete)、WEKO の利用者を無効にして結びつき(sub・eduID)を消し、IdP の利用者を消し、
   発行者のファイルと公開鍵の HTTP サーバを片付ける
 パスワード・シークレットは画面に出さない。
 """
@@ -334,6 +334,45 @@ def main():
             r = requests.get(f"{WEKO}/records/{recid}", verify=REQ_VERIFY, timeout=60)
             ok = r.status_code == 200; results.append(ok)
             print(f"{'PASS' if ok else 'FAIL'}  ログインなしでアイテムの画面が見える: {r.status_code}")
+            # 後で本人が WEKO に SAML でログインしたとき、この利用者に入る(eppn = eduID、aifs ADR-37 §12)
+            shib1 = psql(f"select u.email from shibboleth_user s join accounts_user u on u.id=s.weko_uid where s.shib_eppn='{c.get('eduid')}';")
+            ok = bool(c.get("eduid")) and shib1 == f"{u1}@example.invalid"; results.append(ok)
+            print(f"{'PASS' if ok else 'FAIL'}  作った利用者に eduID のログインの結びつきも置いた: eduid={c.get('eduid')} → {shib1 or '(なし)'}")
+
+        # WEKO に SAML でログインして先に作られた本人の利用者(メールは IdP と違ってよい)には、eduID で結ぶ
+        u5, pw5, id5 = make_idp_user("weko-pre"); users.append(id5)
+        dt5 = exchange(user_token(u5, pw5), secret).json()["access_token"]
+        c5 = jwt.decode(dt5, options={"verify_signature": False})
+        sub5, eduid5 = c5["sub"], c5.get("eduid")
+        assert eduid5, "前提: 委任のトークンに eduid が無い"
+        saml5 = f"weko-pre-saml-{secrets.token_hex(3)}@example.invalid"
+        psql(f"insert into accounts_user (email, active) values ('{saml5}', true);")
+        psql(f"insert into shibboleth_user (shib_eppn, weko_uid, shib_mail) select '{eduid5}', id, '{saml5}' from accounts_user where email='{saml5}';")
+        assert psql(f"select count(*) from shibboleth_user where shib_eppn='{eduid5}';") == "1", "前提: eduID のログインの結びつきを作れていない"
+        t5 = tx(); t5["responsible"] = {"id": f"urn:rdc:holder:{sub5}"}; t5 = enc(t5)
+        b5 = check("SAML のログインで作られた本人の利用者がある", post(dt5, t5, record(t5, responsible=sub5)), 201)
+        linked5 = psql(f"select u.email from dac_idp_user d join accounts_user u on u.id=d.user_id where d.sub='{sub5}';")
+        owner5 = psql(f"select r.json->>'owner' from records_metadata r join pidstore_pid p on p.object_uuid=r.id "
+                      f"where p.pid_type='recid' and p.pid_value='{b5.get('recid')}';")
+        uid5 = psql(f"select id from accounts_user where email='{saml5}';")
+        ok = (b5.get("received") or {}).get("weko_account") == "existing" and linked5 == saml5 and owner5 == uid5; results.append(ok)
+        print(f"{'PASS' if ok else 'FAIL'}  その利用者に結び、その名義で登録した: 区分={(b5.get('received') or {}).get('weko_account')} "
+              f"結びつき={linked5} 所有者={owner5}(期待 {uid5})")
+
+        # eduID の利用者が、すでに別の IdP の利用者に結ばれていれば、結ばずに断る
+        u6, pw6, id6 = make_idp_user("weko-pre"); users.append(id6)
+        dt6 = exchange(user_token(u6, pw6), secret).json()["access_token"]
+        c6 = jwt.decode(dt6, options={"verify_signature": False})
+        sub6, eduid6 = c6["sub"], c6.get("eduid")
+        saml6 = f"weko-pre-saml-{secrets.token_hex(3)}@example.invalid"
+        psql(f"insert into accounts_user (email, active) values ('{saml6}', true);")
+        psql(f"insert into shibboleth_user (shib_eppn, weko_uid, shib_mail) select '{eduid6}', id, '{saml6}' from accounts_user where email='{saml6}';")
+        psql(f"insert into dac_idp_user (sub, user_id, linked_at) select '{uuid.uuid4()}', id, now() from accounts_user where email='{saml6}';")
+        t6 = tx(); t6["responsible"] = {"id": f"urn:rdc:holder:{sub6}"}; t6 = enc(t6)
+        check("eduID の利用者が別の IdP の利用者に結ばれている", post(dt6, t6, record(t6, responsible=sub6)), 409, "weko_account_conflict")
+        n6 = psql(f"select count(*) from dac_idp_user where sub='{sub6}';")
+        ok = n6 == "0"; results.append(ok)
+        print(f"{'PASS' if ok else 'FAIL'}  そのとき、結びつきを作らない({n6} 件)")
     finally:
         for rid in sorted(set(made_recids)):
             out = weko("docker exec -i weko-web-1 sh -c 'cd /tmp && cat > /tmp/rdc_del.py && invenio shell /tmp/rdc_del.py 2>&1 | grep -E \"DELETED|ERR\"'",
@@ -343,6 +382,7 @@ def main():
             print("後片付け: " + (out or f"アイテム {rid} を消せたか分からない"))
         psql("update accounts_user set active=false where email like 'weko-pre-%@example.invalid';")
         psql("delete from dac_idp_user where user_id in (select id from accounts_user where email like 'weko-pre-%@example.invalid');")
+        psql("delete from shibboleth_user where weko_uid in (select id from accounts_user where email like 'weko-pre-%@example.invalid');")
         for uid in users:
             sh(f"bash -c '{KC} delete users/{uid} -r rdc'")
         weko(f"rm -f {ISSUERS_FILE}")

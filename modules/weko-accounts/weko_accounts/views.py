@@ -203,7 +203,15 @@ def shib_auto_login():
         cache_val = json.loads(str(cache_val, encoding='utf-8'))
         shib_user = ShibUser(cache_val)
         if not is_auto_bind:
-            shib_user.get_relation_info()
+            if not shib_user.get_relation_info():
+                # RDC: 結びつきが無い初めての人は、ここで作る(shib_sp_login の説明)。間に同じメールの
+                # 利用者ができていたら、作らずに確認のページへ(new_relation_info はメールで結んでしまう)
+                if not current_app.config['WEKO_ACCOUNTS_SKIP_CONFIRMATION_PAGE'] \
+                        or find_user_by_email(cache_val):
+                    return redirect(url_for('weko_accounts.shib_login',
+                                            **{'Shib-Session-ID': shib_session_id,
+                                               'next': session['next']}))
+                shib_user.new_relation_info()
         else:
             shib_user.new_relation_info()
 
@@ -495,13 +503,14 @@ def shib_sp_login():
         }
 
         if not rst:
-            if current_app.config['WEKO_ACCOUNTS_SKIP_CONFIRMATION_PAGE']:
-                user = find_user_by_email(shib_attr)
-                if user:
-                    next_url = 'weko_accounts.confirm_user_without_page'
-                else:
-                    session['shib_session_id'] = shib_session_id
-                    del query_string['Shib-Session-ID']
+            # RDC(aifs ADR-37 §12): 初めての人は、確認のページを出さずに shib_auto_login でその場で作る。
+            # 同じメールの WEKO の利用者が別にいれば、メールだけでは結ばず確認のページに回す(他人の利用者を
+            # 名乗れるため。プレプリントの受け口の weko_account_conflict と同じ)。元の作りはメールで結び
+            # (confirm_user_without_page)、作るときは本人のセッションに頼っていたが、login.py は自分の
+            # クッキーで POST するので、そのセッションはブラウザに届かない
+            if current_app.config['WEKO_ACCOUNTS_SKIP_CONFIRMATION_PAGE'] \
+                    and not find_user_by_email(shib_attr):
+                pass
             else:
                 # Relation is not existed, cache shibboleth info to redis.
                 next_url = 'weko_accounts.shib_login'
